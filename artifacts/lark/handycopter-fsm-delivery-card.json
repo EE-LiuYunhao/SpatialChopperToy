@@ -1,0 +1,183 @@
+{
+  "schema": "2.0",
+  "config": {
+    "update_multi": true,
+    "width_mode": "default",
+    "summary": {
+      "content": "HandyCopter two-state flight workflow implemented and host-verified"
+    },
+    "style": {
+      "text_size": {
+        "caption": {
+          "default": "notation",
+          "pc": "notation",
+          "mobile": "notation"
+        }
+      },
+      "color": {
+        "muted": {
+          "light_mode": "rgba(100,106,115,1)",
+          "dark_mode": "rgba(150,155,163,1)"
+        }
+      }
+    }
+  },
+  "header": {
+    "title": {
+      "tag": "plain_text",
+      "content": "HandyCopter flight workflow implemented"
+    },
+    "subtitle": {
+      "tag": "plain_text",
+      "content": "Host verification complete; device validation is waiting for ADB"
+    },
+    "template": "blue",
+    "icon": {
+      "tag": "standard_icon",
+      "token": "todo_colorful"
+    },
+    "text_tag_list": [
+      {
+        "tag": "text_tag",
+        "text": {
+          "tag": "plain_text",
+          "content": "IMPLEMENTED"
+        },
+        "color": "blue"
+      },
+      {
+        "tag": "text_tag",
+        "text": {
+          "tag": "plain_text",
+          "content": "ADB PENDING"
+        },
+        "color": "neutral"
+      }
+    ]
+  },
+  "body": {
+    "direction": "vertical",
+    "padding": "12px 12px 20px 12px",
+    "vertical_spacing": "12px",
+    "elements": [
+      {
+        "tag": "column_set",
+        "flex_mode": "none",
+        "horizontal_spacing": "12px",
+        "columns": [
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 2,
+            "background_style": "blue-50",
+            "padding": "12px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "## <font color='blue'>DONE</font>",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='grey'>Implementation</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          },
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "grey-50",
+            "padding": "12px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "**PASS**",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='grey'>Host checks</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          },
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "grey-50",
+            "padding": "12px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "**WAIT**",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='grey'>ADB target</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "collapsible_panel",
+        "expanded": true,
+        "background_color": "blue-50",
+        "border": {
+          "color": "blue-100",
+          "corner_radius": "8px"
+        },
+        "padding": "12px",
+        "vertical_spacing": "4px",
+        "header": {
+          "title": {
+            "tag": "plain_text",
+            "content": "Changes implemented"
+          },
+          "width": "fill"
+        },
+        "elements": [
+          {
+            "tag": "markdown",
+            "content": "- Strict `NOT_RUNNING` / `RUNNING` state machine\n- Floating helicopter is Spatial-interaction draggable before launch\n- Helicopter-owned START / RESTART panel disappears during flight\n- Gravity, lift, and palm control exist only while running\n- Collective gain reduced exactly 20×, from `2.2` to `0.11`\n- Crash freezes at the impact site and restores draggable restart state\n- Stop, Exit, and AlertDialog paths removed"
+          }
+        ]
+      },
+      {
+        "tag": "collapsible_panel",
+        "expanded": true,
+        "background_color": "grey-50",
+        "border": {
+          "color": "grey-200",
+          "corner_radius": "8px"
+        },
+        "padding": "12px",
+        "vertical_spacing": "4px",
+        "header": {
+          "title": {
+            "tag": "plain_text",
+            "content": "Verification and device status"
+          },
+          "width": "fill"
+        },
+        "elements": [
+          {
+            "tag": "markdown",
+            "content": "**Passed:** unit tests, debug APK assembly, Android lint, SpatialUI verifier (0 errors / 0 warnings), and scene-placement gate.\n\n**APK:** `app/build/outputs/apk/debug/app-debug.apk`\n\n<font color='grey'>The host currently reports no connected ADB device, so installation, launch, spatial dragging, and crash-loop validation remain pending until the headset enumerates.</font>"
+          }
+        ]
+      }
+    ]
+  }
+}

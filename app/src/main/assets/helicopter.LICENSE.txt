@@ -1,0 +1,8 @@
+Asset: Helicopter
+Creator: kazuma
+Source: https://poly.pizza/m/EQJ2MECUbx
+Downloaded model: https://static.poly.pizza/e3dfeb10-5525-4a39-83d8-13a709aaca4b.glb
+License: Creative Commons CC0 1.0 Universal (Public Domain)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+Attribution is not required under CC0. This file records the model's provenance.
