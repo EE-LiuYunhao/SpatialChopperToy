@@ -1,0 +1,19 @@
+{
+  "advisories": [],
+  "kotlin_file_count": 3,
+  "passed": true,
+  "scan_inputs": [
+    "app/src/main/java/com/pico/spatial/handycopter/content/HomeStage.kt",
+    "app/src/main/java/com/pico/spatial/handycopter/content/AttitudeBall.kt",
+    "app/src/main/java/com/pico/spatial/handycopter/content/PalmInstruments.kt"
+  ],
+  "schema_version": 3,
+  "signals": {
+    "BoundingBox": 0,
+    "convertPosition": 0,
+    "getVisualBounds": 0,
+    "materialResourceFactory": 1,
+    "meshResourceFactory": 4
+  },
+  "violations": []
+}
