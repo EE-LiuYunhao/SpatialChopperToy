@@ -29,6 +29,7 @@ import com.pico.spatial.core.ecs.simulation.RigidBodyMode
 import com.pico.spatial.core.lifecycle.Cancellable
 import com.pico.spatial.core.math.Bool3
 import com.pico.spatial.core.math.EulerAngles
+import com.pico.spatial.core.math.Quat
 import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.sense.plane.PlaneAnchor
 import com.pico.spatial.sense.plane.PlaneOrientation
@@ -161,6 +162,7 @@ internal class HelicopterSceneController(
     private var crashAudioController: AudioPlayerController? = null
     private var lastObservedDownwardSpeedMetersPerSecond = 0f
     private var lastControlUpdateNanos = 0L
+    private var flightBaselineRotation = Quat()
 
     init {
         sceneRoot.addChild(helicopterEntity)
@@ -290,13 +292,7 @@ internal class HelicopterSceneController(
                 cyclicEnabled = true,
                 deltaSeconds = nextControlDeltaSeconds(),
             )
-        transform.setEulerAngles(
-            EulerAngles(
-                pitch = attitude.pitchDegrees,
-                yaw = attitude.headingDegrees,
-                roll = attitude.rollDegrees,
-            )
-        )
+        transform.setQuaternion(composeLocalAttitude(flightBaselineRotation, attitude))
         val liftNewtons = flightModel.liftForPalmHeight(control?.palmHeightMeters)
         val bodyUp = transform.quaternion.rotateVector(Vector3.UP)
         forceComponent.force =
@@ -322,15 +318,9 @@ internal class HelicopterSceneController(
             return
         }
         val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
-        val currentEuler = transform.eulerAngles
-        val helicopterAtStart =
-            HelicopterAttitudeCommand(
-                pitchDegrees = currentEuler.pitch,
-                rollDegrees = currentEuler.roll,
-                headingDegrees = currentEuler.yaw,
-            )
-        palmFlightCalibration.calibrate(palmAtStart, helicopterAtStart)
-        attitudeController.reset(helicopterAtStart)
+        flightBaselineRotation = transform.quaternion
+        palmFlightCalibration.calibrate(palmAtStart)
+        attitudeController.reset(HelicopterAttitudeCommand(0f, 0f, 0f))
         lastControlUpdateNanos = 0L
         velocityComponent.linearVelocity = Vector3.ZERO
         velocityComponent.angularVelocity = Vector3.ZERO
@@ -359,14 +349,21 @@ internal class HelicopterSceneController(
         }
     }
 
-    /** Levels the helicopter in stage space when a placement drag ends or is canceled. */
+    /** Levels the helicopter with its tail facing the viewer when placement ends or is canceled. */
     fun finishDrag() {
         if (flightModel.mode != FlightMode.NOT_RUNNING || !initialPlacementComplete) return
+        val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
+        val viewerPosition =
+            latestHmdPose?.let { sceneRoot.convertPositionFrom(it.position, null) } ?: return
+        val headingDegrees =
+            tailTowardViewerHeadingDegrees(
+                helicopterPosition = transform.position,
+                viewerPosition = viewerPosition,
+                fallbackHeadingDegrees = transform.eulerAngles.yaw,
+            )
         attitudeController.reset(HelicopterAttitudeCommand(0f, 0f, 0f))
-        helicopterEntity.components[TransformComponent::class.java]?.setEulerAngles(
-            EulerAngles(pitch = 0f, yaw = 0f, roll = 0f)
-        )
-        Log.i(TAG, "Placement drag finished; helicopter orientation reset to zero")
+        transform.setEulerAngles(EulerAngles(pitch = 0f, yaw = headingDegrees, roll = 0f))
+        Log.i(TAG, "Placement drag finished; helicopter leveled with its tail toward the viewer")
     }
 
     /** Cancels scene subscriptions and releases audio before the Stage hierarchy is destroyed. */
@@ -663,5 +660,3 @@ private fun createSpatialAudioEmitter(name: String, volume: Float): Entity =
             )
         )
     }
-
-private fun normalizeHeadingDegrees(degrees: Float): Float = ((degrees % 360f) + 360f) % 360f

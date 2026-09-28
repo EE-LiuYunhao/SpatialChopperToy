@@ -7,7 +7,7 @@ import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /** Palm pitch/roll gain shared by the attitude indicator and helicopter cyclic control. */
-internal const val PALM_ATTITUDE_CONTROL_GAIN = 1f / 5f
+internal const val PALM_ATTITUDE_CONTROL_GAIN = 1f / 20f
 
 internal data class InstrumentReadout(
     val pitchDegrees: Float,
@@ -88,8 +88,8 @@ internal fun calculateInstrumentReadout(forward: Vector3, actualRight: Vector3):
 /**
  * Converts filtered palm attitude into the display and flight-control convention.
  *
- * Both axes preserve the measured palm direction and are attenuated to one fifth of the measured
- * angle. Absolute heading is not modified.
+ * Both axes preserve the measured palm direction and are attenuated to one twentieth of the
+ * measured angle. Absolute heading is not modified.
  */
 internal fun InstrumentReadout.toControlledAttitude(): InstrumentReadout =
     copy(

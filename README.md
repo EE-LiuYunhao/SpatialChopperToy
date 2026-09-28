@@ -18,9 +18,9 @@ There is deliberately no Stop button, Exit button, stop transition, or alert dia
 - Every tracked plane receives a collider. Gentle bottom contact with an upward horizontal plane is a landing; side contacts, non-horizontal contacts, and fast landings are crashes.
 - The launch/recovery panel is a child of the helicopter and faces the viewer.
 - Dragging uses a Spatial gesture targeted to the helicopter entity. The entity is interactable only in `NOT_RUNNING`.
-- Releasing or canceling a placement drag resets the helicopter's stage-space pitch, roll, and yaw to zero.
-- Pressing START or RESTART captures the current filtered palm pitch, roll, and yaw as zero. The attitude ball and heading panel then display movement relative to that pose, eliminating the tracked hand's static roll bias. The helicopter preserves its current orientation and applies the same palm deltas relative to that orientation.
-- Filtered palm pitch and roll preserve the palm's direction and use `1/5` gain for both the attitude ball and helicopter cyclic control. Calibrated yaw remains one-to-one.
+- Releasing or canceling a placement drag levels pitch and roll, then points the helicopter's tail toward the viewer from its new position.
+- Pressing START or RESTART captures the current filtered palm pitch, roll, and yaw as zero. The attitude ball and heading panel then display movement relative to that pose, eliminating the tracked hand's static roll bias. The helicopter preserves its current orientation as a quaternion baseline and composes the same palm deltas in aircraft-local space.
+- Filtered palm pitch and roll preserve the palm's direction and use `1/20` gain for both the attitude ball and helicopter cyclic control. Calibrated yaw remains one-to-one.
 - The palm height at START or RESTART is the neutral collective point. At that height, a level helicopter receives `mass * gravity` rotor lift. Collective gain is `0.11` lift-multiplier units per meter, which is one twentieth of the previous `2.2` mapping.
 - Rotor lift is never converted into an arbitrary world-space translation. It points along body-up, so its vertical component fights gravity and its horizontal component accelerates the helicopter in the tilt direction. Explicit linear rotor damping plus quadratic parasitic air drag oppose velocity and keep a small sustained tilt from producing unbounded speed.
 

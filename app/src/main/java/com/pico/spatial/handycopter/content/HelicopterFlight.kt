@@ -1,7 +1,10 @@
 package com.pico.spatial.handycopter.content
 
+import com.pico.spatial.core.math.EulerAngles
+import com.pico.spatial.core.math.Quat
 import com.pico.spatial.core.math.Vector3
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /** Simulated helicopter mass used by its rigid-body mass properties. */
@@ -90,7 +93,7 @@ internal data class PalmFlightControl(
     val headingDegrees: Float,
 )
 
-/** Bounded attitude command applied to the helicopter rigid body. */
+/** Bounded local-space attitude delta applied relative to the flight-start orientation. */
 internal data class HelicopterAttitudeCommand(
     val pitchDegrees: Float,
     val rollDegrees: Float,
@@ -106,39 +109,36 @@ internal data class CalibratedPalmFlightControl(
 /**
  * Converts absolute palm tracking into start-relative cockpit and helicopter commands.
  *
- * START or RESTART captures the current palm pose as zero and the helicopter's current attitude as
- * its baseline. Subsequent palm pitch, roll, and yaw are shortest-path deltas from that sample;
- * cyclic deltas use the shared one-fifth control gain, while yaw remains one-to-one.
+ * START or RESTART captures the current palm pose as zero. Subsequent palm pitch, roll, and yaw are
+ * shortest-path deltas from that sample; cyclic deltas use the shared one-twentieth control gain,
+ * while yaw remains one-to-one. The scene controller composes these deltas after the helicopter's
+ * flight-start quaternion so every control axis is local to the aircraft.
  */
 internal class PalmFlightCalibration {
-    private data class Snapshot(
-        val palm: PalmFlightControl,
-        val helicopter: HelicopterAttitudeCommand,
-    )
-
-    private var snapshot: Snapshot? = null
+    private var palmAtStart: PalmFlightControl? = null
 
     /** True after a valid palm sample has been captured for the current flight session. */
     val isCalibrated: Boolean
-        get() = snapshot != null
+        get() = palmAtStart != null
 
-    /** Captures the palm zero point and helicopter baseline at START or RESTART. */
-    fun calibrate(palm: PalmFlightControl, helicopter: HelicopterAttitudeCommand) {
-        snapshot = Snapshot(palm = palm, helicopter = helicopter)
+    /** Captures the palm zero point at START or RESTART. */
+    fun calibrate(palm: PalmFlightControl) {
+        palmAtStart = palm
     }
 
-    /** Resolves a raw palm sample into zero-relative instruments and baseline-relative flight. */
+    /**
+     * Resolves a raw palm sample into zero-relative instruments and aircraft-local flight input.
+     */
     fun resolve(palm: PalmFlightControl?): CalibratedPalmFlightControl? {
-        val reference = snapshot ?: return null
+        val reference = palmAtStart ?: return null
         palm ?: return null
         val pitchDelta =
-            shortestSignedAngleDelta(reference.palm.pitchDegrees, palm.pitchDegrees) *
+            shortestSignedAngleDelta(reference.pitchDegrees, palm.pitchDegrees) *
                 PALM_ATTITUDE_CONTROL_GAIN
         val rollDelta =
-            shortestSignedAngleDelta(reference.palm.rollDegrees, palm.rollDegrees) *
+            shortestSignedAngleDelta(reference.rollDegrees, palm.rollDegrees) *
                 PALM_ATTITUDE_CONTROL_GAIN
-        val headingDelta =
-            shortestSignedAngleDelta(reference.palm.headingDegrees, palm.headingDegrees)
+        val headingDelta = shortestSignedAngleDelta(reference.headingDegrees, palm.headingDegrees)
 
         return CalibratedPalmFlightControl(
             instrumentReadout =
@@ -150,13 +150,47 @@ internal class PalmFlightCalibration {
             helicopterControl =
                 PalmFlightControl(
                     palmHeightMeters = palm.palmHeightMeters,
-                    pitchDegrees = reference.helicopter.pitchDegrees + pitchDelta,
-                    rollDegrees = reference.helicopter.rollDegrees + rollDelta,
-                    headingDegrees =
-                        normalizeHeadingDegrees(reference.helicopter.headingDegrees + headingDelta),
+                    pitchDegrees = pitchDelta,
+                    rollDegrees = rollDelta,
+                    headingDegrees = headingDelta,
                 ),
         )
     }
+}
+
+/** Composes a bounded control delta after [baseline], keeping every axis aircraft-local. */
+internal fun composeLocalAttitude(baseline: Quat, localAttitude: HelicopterAttitudeCommand): Quat =
+    (baseline *
+            EulerAngles(
+                    pitch = localAttitude.pitchDegrees,
+                    yaw = localAttitude.headingDegrees,
+                    roll = localAttitude.rollDegrees,
+                )
+                .toQuat())
+        .normalize()
+
+/**
+ * Returns the level yaw whose forward axis points from the viewer toward the helicopter.
+ *
+ * The helicopter model's tail is opposite that axis, so the resulting level pose keeps the tail
+ * facing the viewer after placement. [fallbackHeadingDegrees] is retained when both points have the
+ * same horizontal coordinates.
+ */
+internal fun tailTowardViewerHeadingDegrees(
+    helicopterPosition: Vector3,
+    viewerPosition: Vector3,
+    fallbackHeadingDegrees: Float,
+): Float {
+    val awayFromViewer =
+        Vector3(
+            helicopterPosition.x - viewerPosition.x,
+            0f,
+            helicopterPosition.z - viewerPosition.z,
+        )
+    if (vectorLength(awayFromViewer) <= 1e-6f) return fallbackHeadingDegrees
+    return normalizeHeadingDegrees(
+        Math.toDegrees(atan2(awayFromViewer.x.toDouble(), awayFromViewer.z.toDouble())).toFloat()
+    )
 }
 
 /**
@@ -319,7 +353,7 @@ internal fun shortestSignedAngleDelta(fromDegrees: Float, toDegrees: Float): Flo
     return delta
 }
 
-private fun normalizeHeadingDegrees(degrees: Float): Float = ((degrees % 360f) + 360f) % 360f
+internal fun normalizeHeadingDegrees(degrees: Float): Float = ((degrees % 360f) + 360f) % 360f
 
 private fun vectorLength(vector: Vector3): Float =
     sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)

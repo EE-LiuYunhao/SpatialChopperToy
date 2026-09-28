@@ -1,5 +1,6 @@
 package com.pico.spatial.handycopter.content
 
+import com.pico.spatial.core.math.EulerAngles
 import com.pico.spatial.core.math.Vector3
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -200,26 +201,20 @@ class HelicopterFlightTest {
                 rollDegrees = -9f,
                 headingDegrees = 347f,
             )
-        val helicopterAtStart =
-            HelicopterAttitudeCommand(pitchDegrees = 3f, rollDegrees = -2f, headingDegrees = 41f)
-
-        calibration.calibrate(palmAtStart, helicopterAtStart)
+        calibration.calibrate(palmAtStart)
         val result = requireNotNull(calibration.resolve(palmAtStart))
 
         assertEquals(InstrumentReadout.ZERO, result.instrumentReadout)
-        assertEquals(3f, result.helicopterControl.pitchDegrees, 0.001f)
-        assertEquals(-2f, result.helicopterControl.rollDegrees, 0.001f)
-        assertEquals(41f, result.helicopterControl.headingDegrees, 0.001f)
+        assertEquals(0f, result.helicopterControl.pitchDegrees, 0.001f)
+        assertEquals(0f, result.helicopterControl.rollDegrees, 0.001f)
+        assertEquals(0f, result.helicopterControl.headingDegrees, 0.001f)
         assertEquals(1.17f, result.helicopterControl.palmHeightMeters, 0.001f)
     }
 
     @Test
-    fun calibrationUsesOneFifthCyclicAndShortestPathYawDeltas() {
+    fun calibrationUsesOneTwentiethCyclicAndShortestPathYawDeltas() {
         val calibration = PalmFlightCalibration()
-        calibration.calibrate(
-            palm = PalmFlightControl(1f, 10f, 175f, 350f),
-            helicopter = HelicopterAttitudeCommand(4f, -3f, 80f),
-        )
+        calibration.calibrate(palm = PalmFlightControl(1f, 10f, 175f, 350f))
 
         val result =
             requireNotNull(
@@ -233,12 +228,68 @@ class HelicopterFlightTest {
                 )
             )
 
-        assertEquals(2f, result.instrumentReadout.pitchDegrees, 0.001f)
-        assertEquals(2f, result.instrumentReadout.rollDegrees, 0.001f)
+        assertEquals(0.5f, result.instrumentReadout.pitchDegrees, 0.001f)
+        assertEquals(0.5f, result.instrumentReadout.rollDegrees, 0.001f)
         assertEquals(20f, result.instrumentReadout.headingDegrees, 0.001f)
-        assertEquals(6f, result.helicopterControl.pitchDegrees, 0.001f)
-        assertEquals(-1f, result.helicopterControl.rollDegrees, 0.001f)
-        assertEquals(100f, result.helicopterControl.headingDegrees, 0.001f)
+        assertEquals(0.5f, result.helicopterControl.pitchDegrees, 0.001f)
+        assertEquals(0.5f, result.helicopterControl.rollDegrees, 0.001f)
+        assertEquals(20f, result.helicopterControl.headingDegrees, 0.001f)
+    }
+
+    @Test
+    fun flightAttitudeIsComposedAfterTheAircraftBaseline() {
+        val baseline = EulerAngles(pitch = 11f, yaw = 73f, roll = -8f).toQuat()
+        val localDelta =
+            HelicopterAttitudeCommand(pitchDegrees = 6f, rollDegrees = -4f, headingDegrees = 19f)
+
+        val composed = composeLocalAttitude(baseline, localDelta)
+        val expected =
+            baseline *
+                EulerAngles(
+                        pitch = localDelta.pitchDegrees,
+                        yaw = localDelta.headingDegrees,
+                        roll = localDelta.rollDegrees,
+                    )
+                    .toQuat()
+        val stageSpaceEulerAddition = EulerAngles(pitch = 17f, yaw = 92f, roll = -12f).toQuat()
+
+        assertTrue(composed.equivalentCheck(expected))
+        assertFalse(composed.equivalentCheck(stageSpaceEulerAddition))
+    }
+
+    @Test
+    fun placementHeadingPointsTheTailBackTowardTheViewer() {
+        assertEquals(
+            180f,
+            tailTowardViewerHeadingDegrees(
+                helicopterPosition = Vector3(0f, 1f, -1f),
+                viewerPosition = Vector3.ZERO,
+                fallbackHeadingDegrees = 27f,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            90f,
+            tailTowardViewerHeadingDegrees(
+                helicopterPosition = Vector3(1f, 1f, 0f),
+                viewerPosition = Vector3.ZERO,
+                fallbackHeadingDegrees = 27f,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun placementHeadingRetainsYawWhenViewerAndHelicopterOverlapHorizontally() {
+        assertEquals(
+            27f,
+            tailTowardViewerHeadingDegrees(
+                helicopterPosition = Vector3(1f, 2f, 3f),
+                viewerPosition = Vector3(1f, 1f, 3f),
+                fallbackHeadingDegrees = 27f,
+            ),
+            0.001f,
+        )
     }
 
     @Test
