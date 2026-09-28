@@ -29,6 +29,9 @@ internal const val MAX_CYCLIC_TILT_DEGREES = 30f
 /** Maximum rate at which cyclic pitch or roll can change. */
 internal const val CYCLIC_SLEW_RATE_DEGREES_PER_SECOND = 75f
 
+/** Maximum local yaw rate commanded by a fully displaced RC left pad. */
+internal const val RC_YAW_RATE_DEGREES_PER_SECOND = 90f
+
 /** Low-speed horizontal rotor and airframe drag in newton-seconds per meter. */
 internal const val HORIZONTAL_LINEAR_DRAG_NEWTON_SECONDS_PER_METER = 0.32f
 
@@ -45,6 +48,12 @@ internal const val VERTICAL_QUADRATIC_DRAG_NEWTON_SECONDS_SQUARED_PER_METER_SQUA
 internal enum class FlightMode {
     NOT_RUNNING,
     RUNNING,
+}
+
+/** Input scheme selected once when the stage launches. */
+internal enum class FlightControlMode {
+    REALISTIC,
+    RC_DRONE,
 }
 
 /** Playback commands emitted only at meaningful helicopter state transitions. */
@@ -80,9 +89,71 @@ internal data class FlightUiState(
     val helicopterReady: Boolean = false,
     val mode: FlightMode = FlightMode.NOT_RUNNING,
     val crashed: Boolean = false,
+    val controlMode: FlightControlMode? = null,
+    val controlReady: Boolean = false,
 ) {
     val running: Boolean
         get() = mode == FlightMode.RUNNING
+}
+
+/** A normalized virtual-pad sample, neutral when its fingertip is not touching the pad. */
+internal data class RcPadInput(val x: Float = 0f, val y: Float = 0f, val active: Boolean = false)
+
+/** Local aircraft attitude and lift resolved from one dual-pad controller frame. */
+internal data class RcFlightCommand(val attitude: HelicopterAttitudeCommand, val liftNewtons: Float)
+
+/**
+ * Maps the two AnyController pads to a conventional RC Mode-2 flight command.
+ *
+ * Left X integrates local yaw, left Y controls collective around hover, right X controls roll, and
+ * right Y controls pitch. Missing tracking or an inactive pad neutralizes that pad instead of
+ * retaining stale input.
+ */
+internal class RcFlightController(
+    private val maximumCyclicTiltDegrees: Float = MAX_CYCLIC_TILT_DEGREES,
+    private val yawRateDegreesPerSecond: Float = RC_YAW_RATE_DEGREES_PER_SECOND,
+    private val neutralLiftNewtons: Float = NEUTRAL_LIFT_NEWTONS,
+) {
+    private var headingDegrees = 0f
+
+    init {
+        require(maximumCyclicTiltDegrees in 0f..89f)
+        require(yawRateDegreesPerSecond > 0f)
+        require(neutralLiftNewtons > 0f)
+    }
+
+    /** Resets the integrated local heading at START or RESTART. */
+    fun reset() {
+        headingDegrees = 0f
+    }
+
+    /** Advances the RC mapping by one frame. */
+    fun step(
+        leftPad: RcPadInput,
+        rightPad: RcPadInput,
+        trackingValid: Boolean,
+        deltaSeconds: Float,
+    ): RcFlightCommand {
+        val left = leftPad.takeIf { trackingValid && it.active } ?: RcPadInput()
+        val right = rightPad.takeIf { trackingValid && it.active } ?: RcPadInput()
+        headingDegrees =
+            normalizeSignedAngleDegrees(
+                headingDegrees +
+                    left.x.coerceIn(-1f, 1f) *
+                        yawRateDegreesPerSecond *
+                        deltaSeconds.coerceIn(0f, 1f / 30f)
+            )
+        val liftMultiplier = (1f + left.y.coerceIn(-1f, 1f)).coerceIn(0f, 2f)
+        return RcFlightCommand(
+            attitude =
+                HelicopterAttitudeCommand(
+                    pitchDegrees = right.y.coerceIn(-1f, 1f) * maximumCyclicTiltDegrees,
+                    rollDegrees = right.x.coerceIn(-1f, 1f) * maximumCyclicTiltDegrees,
+                    headingDegrees = headingDegrees,
+                ),
+            liftNewtons = neutralLiftNewtons * liftMultiplier,
+        )
+    }
 }
 
 /** Filtered but uncalibrated palm channels sampled in stage space. */
@@ -354,6 +425,12 @@ internal fun shortestSignedAngleDelta(fromDegrees: Float, toDegrees: Float): Flo
 }
 
 internal fun normalizeHeadingDegrees(degrees: Float): Float = ((degrees % 360f) + 360f) % 360f
+
+/** Normalizes an angle to the shortest signed representation from -180 through 180 degrees. */
+internal fun normalizeSignedAngleDegrees(degrees: Float): Float {
+    val normalized = normalizeHeadingDegrees(degrees)
+    return if (normalized > 180f) normalized - 360f else normalized
+}
 
 private fun vectorLength(vector: Vector3): Float =
     sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)

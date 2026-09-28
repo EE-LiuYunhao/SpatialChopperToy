@@ -52,6 +52,7 @@ configure<DetektExtension> {
 }
 
 dependencies {
+    implementation(project(":anycontroller"))
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.spatial.bom))
     implementation(libs.spatial.core)

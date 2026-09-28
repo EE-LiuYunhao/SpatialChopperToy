@@ -39,3 +39,5 @@ dependencyResolutionManagement {
 rootProject.name = "HandyCopter"
 
 include(":app")
+
+include(":anycontroller")

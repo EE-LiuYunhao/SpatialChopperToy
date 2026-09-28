@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.anycontroller.library.model.AnyControllerStatus
+import com.example.anycontroller.library.model.CalibrationState
 import com.pico.spatial.ui.design.Button
 import com.pico.spatial.ui.design.ButtonDefaults
 import com.pico.spatial.ui.design.Text
@@ -39,9 +41,14 @@ private val InstrumentYellow = Color(0xFFFFC928) // design-style: fixed-figma-co
 private val PanelScrim = Color(0xCC11151A) // design-style: fixed-figma-color panel scrim
 private val StartGreen = Color(0xFF168A45) // design-style: fixed-figma-color start control
 
-/** Renders the single-action launch panel attached directly to the helicopter entity. */
+/** Renders launch/restart state for the selected control mode on the helicopter entity. */
 @Composable
-internal fun HelicopterLaunchPanel(crashed: Boolean, onStart: () -> Unit) {
+internal fun HelicopterLaunchPanel(
+    crashed: Boolean,
+    controlMode: FlightControlMode?,
+    controlReady: Boolean,
+    onStart: () -> Unit,
+) {
     Column(
         modifier =
             Modifier.fillMaxSize().background(PanelScrim, RoundedCornerShape(16.dp)).padding(8.dp),
@@ -50,10 +57,11 @@ internal fun HelicopterLaunchPanel(crashed: Boolean, onStart: () -> Unit) {
     ) {
         Text(
             text =
-                if (crashed) {
-                    "Oops, crashed. Now you may drag the helicopter to its start position again"
-                } else {
-                    "Drag the helicopter to its start position"
+                when {
+                    crashed -> "Oops, crashed. Drag the helicopter to its next start position"
+                    !controlReady && controlMode == FlightControlMode.REALISTIC ->
+                        "Show a palm to enable START"
+                    else -> "Drag the helicopter to its start position"
                 },
             color = InstrumentWhite,
             fontSize = 12.sp,
@@ -63,6 +71,7 @@ internal fun HelicopterLaunchPanel(crashed: Boolean, onStart: () -> Unit) {
         )
         Button(
             onClick = onStart,
+            enabled = controlReady,
             size = ButtonDefaults.Small,
             colors =
                 ButtonDefaults.buttonColors(
@@ -79,6 +88,102 @@ internal fun HelicopterLaunchPanel(crashed: Boolean, onStart: () -> Unit) {
         }
     }
 }
+
+/** Renders the launch-time mode choice and the guided AnyController calibration sequence. */
+@Composable
+internal fun ControllerSetupPanel(
+    controlMode: FlightControlMode?,
+    controllerStatus: AnyControllerStatus,
+    calibrationState: CalibrationState,
+    detectedSurfaceCount: Int,
+    onModeSelected: (FlightControlMode) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier.fillMaxSize().background(PanelScrim, RoundedCornerShape(20.dp)).padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+    ) {
+        Text(
+            text =
+                if (controlMode == null) "Choose a flight control mode" else "RC controller setup",
+            color = InstrumentWhite,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        if (controlMode == null) {
+            Text(
+                text =
+                    "Realistic uses your palm as cyclic, pedals, and collective. " +
+                        "RC Drone uses two finger-operated touchpads.",
+                color = InstrumentWhite,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+            )
+            Button(
+                onClick = { onModeSelected(FlightControlMode.REALISTIC) },
+                size = ButtonDefaults.Small,
+            ) {
+                // design-style: inherited-content-color Button
+                Text("REALISTIC HELICOPTER")
+            }
+            Button(
+                onClick = { onModeSelected(FlightControlMode.RC_DRONE) },
+                size = ButtonDefaults.Small,
+            ) {
+                // design-style: inherited-content-color Button
+                Text("RC DRONE")
+            }
+        } else {
+            Text(
+                text =
+                    rcCalibrationInstruction(
+                        status = controllerStatus,
+                        calibrationState = calibrationState,
+                        detectedSurfaceCount = detectedSurfaceCount,
+                    ),
+                color = InstrumentWhite,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Left pad: lift + yaw   •   Right pad: pitch + roll",
+                color = InstrumentWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+private fun rcCalibrationInstruction(
+    status: AnyControllerStatus,
+    calibrationState: CalibrationState,
+    detectedSurfaceCount: Int,
+): String =
+    when {
+        status == AnyControllerStatus.ERROR ->
+            "Controller startup failed. Relaunch HandyCopter to retry."
+        status == AnyControllerStatus.UNAVAILABLE ->
+            "Hand tracking is unavailable. Make both hands visible and try again."
+        calibrationState == CalibrationState.WAITING_FOR_SURFACE ->
+            "Scanning $detectedSurfaceCount planes. Touch a white plane outline with your left index finger."
+        calibrationState == CalibrationState.PLACE_LEFT_CENTER ->
+            "Touch the center of the LEFT virtual pad with your left index finger."
+        calibrationState == CalibrationState.PLACE_LEFT_BOUNDARY ->
+            "Slide left index outward to draw the LEFT circle, then lift it at least 5 cm."
+        calibrationState == CalibrationState.CALIBRATE_LEFT_UP ->
+            "Touch above the LEFT center to define the forward (+Y) direction."
+        calibrationState == CalibrationState.PLACE_RIGHT_CENTER ->
+            "Touch the center of the RIGHT virtual pad with your right index finger."
+        calibrationState == CalibrationState.PLACE_RIGHT_BOUNDARY ->
+            "Slide right index outward to draw the RIGHT circle, then lift it at least 5 cm."
+        calibrationState == CalibrationState.READY ->
+            "Controller ready. Use START on the helicopter."
+        else -> "Starting plane and hand tracking…"
+    }
 
 /** Renders the absolute stage-space heading indicator beside the attitude ball. */
 @Composable

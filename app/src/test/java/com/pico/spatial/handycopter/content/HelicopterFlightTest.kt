@@ -258,6 +258,101 @@ class HelicopterFlightTest {
     }
 
     @Test
+    fun rcPadsMapToModeTwoCollectiveYawPitchAndRoll() {
+        val controller =
+            RcFlightController(
+                maximumCyclicTiltDegrees = 30f,
+                yawRateDegreesPerSecond = 90f,
+                neutralLiftNewtons = 4f,
+            )
+
+        val command =
+            controller.step(
+                leftPad = RcPadInput(x = 0.5f, y = -0.25f, active = true),
+                rightPad = RcPadInput(x = -0.4f, y = 0.6f, active = true),
+                trackingValid = true,
+                deltaSeconds = 1f / 30f,
+            )
+
+        assertEquals(18f, command.attitude.pitchDegrees, 0.001f)
+        assertEquals(-12f, command.attitude.rollDegrees, 0.001f)
+        assertEquals(1.5f, command.attitude.headingDegrees, 0.001f)
+        assertEquals(3f, command.liftNewtons, 0.001f)
+    }
+
+    @Test
+    fun rcInactiveOrLostPadsReturnToNeutralWithoutRetainingStaleCommands() {
+        val controller =
+            RcFlightController(
+                maximumCyclicTiltDegrees = 30f,
+                yawRateDegreesPerSecond = 90f,
+                neutralLiftNewtons = 4f,
+            )
+        controller.step(
+            leftPad = RcPadInput(x = 1f, y = 1f, active = true),
+            rightPad = RcPadInput(x = 1f, y = 1f, active = true),
+            trackingValid = true,
+            deltaSeconds = 1f / 30f,
+        )
+
+        val inactive =
+            controller.step(
+                leftPad = RcPadInput(x = 1f, y = 1f, active = false),
+                rightPad = RcPadInput(x = 1f, y = 1f, active = false),
+                trackingValid = true,
+                deltaSeconds = 1f / 30f,
+            )
+        val lost =
+            controller.step(
+                leftPad = RcPadInput(x = -1f, y = -1f, active = true),
+                rightPad = RcPadInput(x = -1f, y = -1f, active = true),
+                trackingValid = false,
+                deltaSeconds = 1f / 30f,
+            )
+
+        assertEquals(0f, inactive.attitude.pitchDegrees, 0f)
+        assertEquals(0f, inactive.attitude.rollDegrees, 0f)
+        assertEquals(3f, inactive.attitude.headingDegrees, 0.001f)
+        assertEquals(4f, inactive.liftNewtons, 0f)
+        assertEquals(0f, lost.attitude.pitchDegrees, 0f)
+        assertEquals(0f, lost.attitude.rollDegrees, 0f)
+        assertEquals(3f, lost.attitude.headingDegrees, 0.001f)
+        assertEquals(4f, lost.liftNewtons, 0f)
+    }
+
+    @Test
+    fun rcControllerClampsAxesAndResetsIntegratedYaw() {
+        val controller =
+            RcFlightController(
+                maximumCyclicTiltDegrees = 20f,
+                yawRateDegreesPerSecond = 60f,
+                neutralLiftNewtons = 5f,
+            )
+
+        val clamped =
+            controller.step(
+                leftPad = RcPadInput(x = 5f, y = -5f, active = true),
+                rightPad = RcPadInput(x = 5f, y = -5f, active = true),
+                trackingValid = true,
+                deltaSeconds = 1f,
+            )
+        controller.reset()
+        val reset =
+            controller.step(
+                leftPad = RcPadInput(),
+                rightPad = RcPadInput(),
+                trackingValid = true,
+                deltaSeconds = 0f,
+            )
+
+        assertEquals(-20f, clamped.attitude.pitchDegrees, 0f)
+        assertEquals(20f, clamped.attitude.rollDegrees, 0f)
+        assertEquals(2f, clamped.attitude.headingDegrees, 0.001f)
+        assertEquals(0f, clamped.liftNewtons, 0f)
+        assertEquals(0f, reset.attitude.headingDegrees, 0f)
+    }
+
+    @Test
     fun placementHeadingPointsTheTailBackTowardTheViewer() {
         assertEquals(
             180f,
