@@ -7,7 +7,7 @@ import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /** Palm pitch/roll gain shared by the attitude indicator and helicopter cyclic control. */
-internal const val PALM_ATTITUDE_CONTROL_GAIN = 1f / 5f
+internal const val PALM_ATTITUDE_CONTROL_GAIN = 3f / 40f
 
 internal data class InstrumentReadout(
     val pitchDegrees: Float,
@@ -88,14 +88,21 @@ internal fun calculateInstrumentReadout(forward: Vector3, actualRight: Vector3):
 /**
  * Converts filtered palm attitude into the display and flight-control convention.
  *
- * Both axes preserve the measured palm direction and are attenuated to one fifth of the measured
- * angle. Absolute heading is not modified.
+ * Palm joint geometry reports both cyclic axes opposite the aircraft's visual rotation convention,
+ * so pitch and roll are inverted and attenuated to three fortieths of the measured angle. Absolute
+ * heading is not modified.
  */
 internal fun InstrumentReadout.toControlledAttitude(): InstrumentReadout =
     copy(
-        pitchDegrees = pitchDegrees * PALM_ATTITUDE_CONTROL_GAIN,
-        rollDegrees = rollDegrees * PALM_ATTITUDE_CONTROL_GAIN,
+        pitchDegrees = mapPalmCyclicAngle(pitchDegrees),
+        rollDegrees = mapPalmCyclicAngle(rollDegrees),
     )
+
+/** Maps one measured palm-angle delta into the aircraft cyclic sign and sensitivity. */
+internal fun mapPalmCyclicAngle(deltaDegrees: Float): Float {
+    val mapped = -deltaDegrees * PALM_ATTITUDE_CONTROL_GAIN
+    return if (mapped == 0f) 0f else mapped
+}
 
 private fun HandPose.validJoint(index: HandJoint.Index): HandJoint? {
     val joint = handJoints.firstOrNull { it.index == index } ?: return null

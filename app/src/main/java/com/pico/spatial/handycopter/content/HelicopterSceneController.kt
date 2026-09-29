@@ -1,6 +1,8 @@
 package com.pico.spatial.handycopter.content
 
 import android.util.Log
+import com.example.anycontroller.library.model.AnyControllerFrame
+import com.example.anycontroller.library.model.CalibrationState
 import com.pico.spatial.core.container.SpatialViewContent
 import com.pico.spatial.core.ecs.CollisionComponent
 import com.pico.spatial.core.ecs.Entity
@@ -8,7 +10,6 @@ import com.pico.spatial.core.ecs.HoverEffectComponent
 import com.pico.spatial.core.ecs.InteractableComponent
 import com.pico.spatial.core.ecs.LoadType
 import com.pico.spatial.core.ecs.ObjectAudioComponent
-import com.pico.spatial.core.ecs.PhysicsForceComponent
 import com.pico.spatial.core.ecs.PhysicsVelocityComponent
 import com.pico.spatial.core.ecs.RigidBodyComponent
 import com.pico.spatial.core.ecs.TransformComponent
@@ -20,18 +21,16 @@ import com.pico.spatial.core.ecs.event.CollisionEvents
 import com.pico.spatial.core.ecs.resource.AudioResource
 import com.pico.spatial.core.ecs.resource.PhysicsMaterialResource
 import com.pico.spatial.core.ecs.resource.ShapeResource
-import com.pico.spatial.core.ecs.simulation.CollisionContact
 import com.pico.spatial.core.ecs.simulation.CollisionDetectionMode
-import com.pico.spatial.core.ecs.simulation.CollisionInfoDetailLevel
 import com.pico.spatial.core.ecs.simulation.CollisionResponseMode
 import com.pico.spatial.core.ecs.simulation.MassProperties
 import com.pico.spatial.core.ecs.simulation.RigidBodyMode
 import com.pico.spatial.core.lifecycle.Cancellable
 import com.pico.spatial.core.math.Bool3
 import com.pico.spatial.core.math.EulerAngles
+import com.pico.spatial.core.math.Quat
 import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.sense.plane.PlaneAnchor
-import com.pico.spatial.sense.plane.PlaneOrientation
 import com.pico.spatial.tracking.hmd.HMDPose
 import java.util.UUID
 import kotlin.math.atan2
@@ -58,8 +57,9 @@ private val HELICOPTER_SOURCE_CENTER = Vector3(0.00580175f, 0.76734895f, -0.8275
 
 /**
  * Owns the draggable helicopter entity, its physics state machine, tracked-plane colliders,
- * palm-driven flight controls, and helicopter-bound positional audio.
+ * selectable palm or dual-pad flight controls, and helicopter-bound positional audio.
  */
+@Suppress("LargeClass")
 internal class HelicopterSceneController(
     private val sceneRoot: Entity,
     private val launchPanelEntity: Entity,
@@ -93,6 +93,7 @@ internal class HelicopterSceneController(
 
     private val flightModel = HelicopterFlightModel()
     private val attitudeController = HelicopterAttitudeController()
+    private val rcFlightController = RcFlightController()
     private val planeRecords = linkedMapOf<UUID, PlaneRecord>()
     private val planeByColliderId = mutableMapOf<Long, PlaneRecord>()
     // Mass-property generation consumes its input shape, so use a separate shape for the collider.
@@ -113,7 +114,6 @@ internal class HelicopterSceneController(
             collisionShape = listOf(helicopterShape),
             physicsMaterial = physicsMaterial,
             collisionResponseMode = CollisionResponseMode.COLLIDER_FULL,
-            collisionInfoDetailLevel = CollisionInfoDetailLevel.DETAILED,
         )
     private val helicopterRigidBody =
         RigidBodyComponent(
@@ -123,12 +123,11 @@ internal class HelicopterSceneController(
             .apply {
                 isAffectedByGravity = false
                 isRotationLocked = Bool3(true)
-                // Translational damping is modeled explicitly as a testable aerodynamic force.
+                // Translation is driven by the testable drag-limited velocity solver.
                 linearDamping = 0f
                 angularDamping = 1f
                 collisionDetectionMode = CollisionDetectionMode.CONTINUOUS_DYNAMIC
             }
-    private val forceComponent = PhysicsForceComponent(Vector3.ZERO, Vector3.ZERO)
     private val velocityComponent = PhysicsVelocityComponent(Vector3.ZERO, Vector3.ZERO)
     private val rotorAudioEmitter =
         createSpatialAudioEmitter("MainRotorAudioEmitter", ROTOR_AUDIO_VOLUME)
@@ -136,10 +135,9 @@ internal class HelicopterSceneController(
         createSpatialAudioEmitter("CrashAudioEmitter", CRASH_AUDIO_VOLUME)
     private val helicopterEntity =
         Entity().apply {
-            setName("PalmControlledHelicopter")
+            setName("DualModeHelicopter")
             components.set(helicopterCollision)
             components.set(helicopterRigidBody)
-            components.set(forceComponent)
             components.set(velocityComponent)
             components.set(InteractableComponent())
             components.set(HoverEffectComponent())
@@ -153,14 +151,17 @@ internal class HelicopterSceneController(
     private var collisionUpdateSubscription: Cancellable? = null
     private var latestHmdPose: HMDPose? = null
     private var latestPalmControl: PalmFlightControl? = null
+    private var selectedControlMode: FlightControlMode? = null
+    private var rcControllerReady = false
     private var initialPlacementComplete = false
     private var modelLoaded = false
     private var rotorAudioResource: AudioResource? = null
     private var crashAudioResource: AudioResource? = null
     private var rotorAudioController: AudioPlayerController? = null
     private var crashAudioController: AudioPlayerController? = null
-    private var lastObservedDownwardSpeedMetersPerSecond = 0f
     private var lastControlUpdateNanos = 0L
+    private var flightBaselineRotation = Quat()
+    private var flightStartHeadingDegrees = 0f
 
     init {
         sceneRoot.addChild(helicopterEntity)
@@ -192,24 +193,12 @@ internal class HelicopterSceneController(
             collisionEnterSubscription =
                 content.subscribe(CollisionEvents.Enter::class.java, helicopterEntity, null) { event
                     ->
-                    handleCollision(
-                        event.entityA,
-                        event.entityB,
-                        event.contacts,
-                        event.position,
-                        logSafeLanding = true,
-                    )
+                    handleCollision(event.entityA, event.entityB, event.position)
                 }
             collisionUpdateSubscription =
                 content.subscribe(CollisionEvents.Update::class.java, helicopterEntity, null) {
                     event ->
-                    handleCollision(
-                        event.entityA,
-                        event.entityB,
-                        event.contacts,
-                        event.position,
-                        logSafeLanding = false,
-                    )
+                    handleCollision(event.entityA, event.entityB, event.position)
                 }
         }
     }
@@ -253,7 +242,6 @@ internal class HelicopterSceneController(
                             ),
                         physicsMaterial = physicsMaterial,
                         collisionResponseMode = CollisionResponseMode.COLLIDER_FULL,
-                        collisionInfoDetailLevel = CollisionInfoDetailLevel.DETAILED,
                     )
                 )
             }
@@ -275,11 +263,24 @@ internal class HelicopterSceneController(
         removed.anchorEntity.destroy()
     }
 
+    /** Selects the launch-time input mode; the choice is immutable for this app session. */
+    fun selectControlMode(mode: FlightControlMode) {
+        if (selectedControlMode != null) return
+        selectedControlMode = mode
+        refreshLaunchPanelVisibility()
+        publishUiState()
+        Log.i(TAG, "Selected flight control mode: $mode")
+    }
+
     /** Applies palm cyclic, collective, and heading input only while RUNNING. */
     fun updatePalmControl(control: PalmFlightControl?) {
+        if (selectedControlMode != FlightControlMode.REALISTIC) return
+        val readinessChanged = (latestPalmControl != null) != (control != null)
         latestPalmControl = control
-        lastObservedDownwardSpeedMetersPerSecond =
-            (-velocityComponent.linearVelocity.y).coerceAtLeast(0f)
+        if (readinessChanged) {
+            refreshLaunchPanelVisibility()
+            publishUiState()
+        }
         if (flightModel.mode != FlightMode.RUNNING) return
 
         val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
@@ -290,65 +291,112 @@ internal class HelicopterSceneController(
                 cyclicEnabled = true,
                 deltaSeconds = nextControlDeltaSeconds(),
             )
-        transform.setEulerAngles(
-            EulerAngles(
-                pitch = attitude.pitchDegrees,
-                yaw = attitude.headingDegrees,
-                roll = attitude.rollDegrees,
-            )
-        )
+        transform.setQuaternion(composeLocalAttitude(flightBaselineRotation, attitude))
         val liftNewtons = flightModel.liftForPalmHeight(control?.palmHeightMeters)
-        val bodyUp = transform.quaternion.rotateVector(Vector3.UP)
-        forceComponent.force =
-            calculateHelicopterAerodynamicForce(
-                bodyUp = bodyUp,
-                liftNewtons = liftNewtons,
-                velocityMetersPerSecond = velocityComponent.linearVelocity,
-            )
+        velocityComponent.linearVelocity =
+            solveHelicopterMotion(
+                    attitude = attitude,
+                    liftNewtons = liftNewtons,
+                    flightStartHeadingDegrees = flightStartHeadingDegrees,
+                )
+                .worldVelocityMetersPerSecond
     }
 
-    /**
-     * Starts or restarts flight after calibrating palm attitude and height at the click instant.
-     */
+    /** Applies one calibrated AnyController frame as conventional RC Mode-2 input. */
+    fun updateRcControl(frame: AnyControllerFrame) {
+        if (selectedControlMode != FlightControlMode.RC_DRONE) return
+        val ready = frame.calibrationState == CalibrationState.READY
+        if (ready != rcControllerReady) {
+            rcControllerReady = ready
+            refreshLaunchPanelVisibility()
+            publishUiState()
+        }
+        if (flightModel.mode != FlightMode.RUNNING || !ready) return
+
+        val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
+        val deltaSeconds = nextControlDeltaSeconds()
+        val command =
+            rcFlightController.step(
+                leftPad =
+                    RcPadInput(
+                        x = frame.leftPad.x,
+                        y = frame.leftPad.y,
+                        active = frame.leftPad.active,
+                    ),
+                rightPad =
+                    RcPadInput(
+                        x = frame.rightPad.x,
+                        y = frame.rightPad.y,
+                        active = frame.rightPad.active,
+                    ),
+                trackingValid = frame.trackingValid,
+                deltaSeconds = deltaSeconds,
+            )
+        val attitude =
+            attitudeController.step(
+                control =
+                    PalmFlightControl(
+                        palmHeightMeters = 0f,
+                        pitchDegrees = command.attitude.pitchDegrees,
+                        rollDegrees = command.attitude.rollDegrees,
+                        headingDegrees = command.attitude.headingDegrees,
+                    ),
+                cyclicEnabled = true,
+                deltaSeconds = deltaSeconds,
+            )
+        transform.setQuaternion(composeLocalAttitude(flightBaselineRotation, attitude))
+        velocityComponent.linearVelocity =
+            solveHelicopterMotion(
+                    attitude = attitude,
+                    liftNewtons = command.liftNewtons,
+                    flightStartHeadingDegrees = flightStartHeadingDegrees,
+                )
+                .worldVelocityMetersPerSecond
+    }
+
+    /** Starts or restarts flight after zeroing the selected controller at the click instant. */
     fun startFlight() {
         if (flightModel.mode == FlightMode.RUNNING) return
         if (!initialPlacementComplete || !modelLoaded) {
             Log.w(TAG, "Ignoring START until the helicopter is loaded and placed")
             return
         }
-        val palmAtStart = latestPalmControl
-        if (palmAtStart == null) {
-            Log.w(TAG, "Ignoring START until a valid palm pose is tracked for calibration")
+        val controlMode = selectedControlMode
+        if (controlMode == null || !controlReady()) {
+            Log.w(TAG, "Ignoring START until the selected controller is ready")
             return
         }
+        val palmAtStart = latestPalmControl
         val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
-        val currentEuler = transform.eulerAngles
-        val helicopterAtStart =
-            HelicopterAttitudeCommand(
-                pitchDegrees = currentEuler.pitch,
-                rollDegrees = currentEuler.roll,
-                headingDegrees = currentEuler.yaw,
-            )
-        palmFlightCalibration.calibrate(palmAtStart, helicopterAtStart)
-        attitudeController.reset(helicopterAtStart)
+        flightStartHeadingDegrees = transform.eulerAngles.yaw
+        flightBaselineRotation = EulerAngles(yaw = flightStartHeadingDegrees).toQuat()
+        transform.setQuaternion(flightBaselineRotation)
+        when (controlMode) {
+            FlightControlMode.REALISTIC ->
+                palmFlightCalibration.calibrate(requireNotNull(palmAtStart))
+            FlightControlMode.RC_DRONE -> rcFlightController.reset()
+        }
+        attitudeController.reset(HelicopterAttitudeCommand(0f, 0f, 0f))
         lastControlUpdateNanos = 0L
         velocityComponent.linearVelocity = Vector3.ZERO
         velocityComponent.angularVelocity = Vector3.ZERO
         setDragInteractionEnabled(false)
         launchPanelEntity.enabled = false
-        helicopterRigidBody.isAffectedByGravity = true
+        // Gravity is already included in solveHelicopterMotion's local net-force calculation.
+        helicopterRigidBody.isAffectedByGravity = false
         helicopterRigidBody.rigidBodyMode = RigidBodyMode.DYNAMIC
         val previousMode = flightModel.mode
-        val neutralLift = flightModel.start(palmAtStart.palmHeightMeters)
+        val neutralLift = flightModel.start(palmAtStart?.palmHeightMeters)
         applyAudioTransition(previousMode = previousMode, causedByCrash = false)
-        forceComponent.force =
-            calculateHelicopterAerodynamicForce(
-                bodyUp = transform.quaternion.rotateVector(Vector3.UP),
-                liftNewtons = neutralLift,
-                velocityMetersPerSecond = Vector3.ZERO,
-            )
+        velocityComponent.linearVelocity =
+            solveHelicopterMotion(
+                    attitude = HelicopterAttitudeCommand(0f, 0f, 0f),
+                    liftNewtons = neutralLift,
+                    flightStartHeadingDegrees = flightStartHeadingDegrees,
+                )
+                .worldVelocityMetersPerSecond
         publishUiState()
-        Log.i(TAG, "Flight mode changed to ${flightModel.mode}; palm pose and height calibrated")
+        Log.i(TAG, "Flight mode changed to ${flightModel.mode}; $controlMode controls zeroed")
     }
 
     /** Applies an incremental, scene-space drag delta while the helicopter is not running. */
@@ -359,14 +407,21 @@ internal class HelicopterSceneController(
         }
     }
 
-    /** Levels the helicopter in stage space when a placement drag ends or is canceled. */
+    /** Levels the helicopter with its tail facing the viewer when placement ends or is canceled. */
     fun finishDrag() {
         if (flightModel.mode != FlightMode.NOT_RUNNING || !initialPlacementComplete) return
+        val transform = helicopterEntity.components[TransformComponent::class.java] ?: return
+        val viewerPosition =
+            latestHmdPose?.let { sceneRoot.convertPositionFrom(it.position, null) } ?: return
+        val headingDegrees =
+            tailTowardViewerHeadingDegrees(
+                helicopterPosition = transform.position,
+                viewerPosition = viewerPosition,
+                fallbackHeadingDegrees = transform.eulerAngles.yaw,
+            )
         attitudeController.reset(HelicopterAttitudeCommand(0f, 0f, 0f))
-        helicopterEntity.components[TransformComponent::class.java]?.setEulerAngles(
-            EulerAngles(pitch = 0f, yaw = 0f, roll = 0f)
-        )
-        Log.i(TAG, "Placement drag finished; helicopter orientation reset to zero")
+        transform.setEulerAngles(EulerAngles(pitch = 0f, yaw = headingDegrees, roll = 0f))
+        Log.i(TAG, "Placement drag finished; helicopter leveled with its tail toward the viewer")
     }
 
     /** Cancels scene subscriptions and releases audio before the Stage hierarchy is destroyed. */
@@ -519,19 +574,13 @@ internal class HelicopterSceneController(
         }
         initialPlacementComplete = true
         helicopterEntity.enabled = true
-        launchPanelEntity.enabled = true
+        refreshLaunchPanelVisibility()
         setDragInteractionEnabled(true)
         publishUiState()
         Log.i(TAG, "Helicopter placed at $position in front of the viewer")
     }
 
-    private fun handleCollision(
-        entityA: Entity?,
-        entityB: Entity?,
-        contacts: List<CollisionContact>,
-        position: Vector3,
-        logSafeLanding: Boolean,
-    ) {
+    private fun handleCollision(entityA: Entity?, entityB: Entity?, position: Vector3) {
         if (flightModel.mode != FlightMode.RUNNING) return
         val otherEntity =
             when (helicopterEntity) {
@@ -539,65 +588,29 @@ internal class HelicopterSceneController(
                 entityB -> entityA
                 else -> null
             } ?: return
-        val plane = planeByColliderId[otherEntity.id] ?: return
-        val contactPositions =
-            contacts
-                .map { it.position }
-                .ifEmpty {
-                    // Some runtimes provide the aggregate collision position but omit detailed
-                    // points.
-                    listOf(position)
-                }
-        val bodyTransform = helicopterEntity.components[TransformComponent::class.java]
-        val localContactHeights =
-            if (bodyTransform == null) {
-                emptyList()
-            } else {
-                contactPositions.map { contactPosition ->
-                    bodyTransform.quaternion
-                        .conjugate()
-                        .rotateVector(contactPosition - bodyTransform.position)
-                        .y
-                }
-            }
-        val downwardSpeed =
-            maxOf(
-                (-velocityComponent.linearVelocity.y).coerceAtLeast(0f),
-                lastObservedDownwardSpeedMetersPerSecond,
-            )
-        val safeLanding =
-            isSafeLandingContact(
-                planeIsHorizontalUpward =
-                    plane.anchor.planeOrientation == PlaneOrientation.HORIZONTAL_UPWARD,
-                localContactHeightsMeters = localContactHeights,
-                downwardSpeedMetersPerSecond = downwardSpeed,
-            )
-        if (safeLanding) {
-            if (logSafeLanding) {
-                Log.i(
-                    TAG,
-                    "Safe landing: contacts=${contactPositions.size}, speed=$downwardSpeed m/s",
-                )
-            }
+        val plane = planeByColliderId[otherEntity.id]
+        if (
+            !shouldCrashOnTrackedPlane(flightModel.mode, collidedWithTrackedPlane = plane != null)
+        ) {
             return
         }
+        requireNotNull(plane)
 
         val previousMode = flightModel.mode
         flightModel.crash()
         applyAudioTransition(previousMode = previousMode, causedByCrash = true)
-        forceComponent.force = Vector3.ZERO
         helicopterRigidBody.isAffectedByGravity = false
         helicopterRigidBody.rigidBodyMode = RigidBodyMode.KINEMATIC
         velocityComponent.linearVelocity = Vector3.ZERO
         velocityComponent.angularVelocity = Vector3.ZERO
         lastControlUpdateNanos = 0L
         setDragInteractionEnabled(true)
-        launchPanelEntity.enabled = true
+        refreshLaunchPanelVisibility()
         publishUiState()
         Log.w(
             TAG,
-            "Helicopter crashed at $position; plane=${plane.anchor.planeOrientation}, " +
-                "localY=$localContactHeights, speed=$downwardSpeed m/s",
+            "Helicopter crashed at $position; plane=${plane.anchor.planeOrientation}; " +
+                "RESTART and placement restored",
         )
     }
 
@@ -621,12 +634,29 @@ internal class HelicopterSceneController(
         }
     }
 
+    private fun controlReady(): Boolean =
+        when (selectedControlMode) {
+            FlightControlMode.REALISTIC -> latestPalmControl != null
+            FlightControlMode.RC_DRONE -> rcControllerReady
+            null -> false
+        }
+
+    private fun refreshLaunchPanelVisibility() {
+        launchPanelEntity.enabled =
+            initialPlacementComplete &&
+                modelLoaded &&
+                flightModel.mode == FlightMode.NOT_RUNNING &&
+                selectedControlMode != null
+    }
+
     private fun publishUiState() {
         onUiStateChanged(
             FlightUiState(
                 helicopterReady = initialPlacementComplete && modelLoaded,
                 mode = flightModel.mode,
                 crashed = flightModel.crashed,
+                controlMode = selectedControlMode,
+                controlReady = controlReady(),
             )
         )
     }
@@ -663,5 +693,3 @@ private fun createSpatialAudioEmitter(name: String, volume: Float): Entity =
             )
         )
     }
-
-private fun normalizeHeadingDegrees(degrees: Float): Float = ((degrees % 360f) + 360f) % 360f

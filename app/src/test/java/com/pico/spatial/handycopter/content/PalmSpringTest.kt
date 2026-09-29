@@ -102,13 +102,13 @@ class PalmSpringTest {
     }
 
     @Test
-    fun controlledAttitudePreservesDirectionAndUsesOneFifthGain() {
+    fun controlledAttitudeInvertsPalmAxesAndUsesThreeFortiethsGain() {
         val controlled =
             InstrumentReadout(pitchDegrees = 20f, rollDegrees = -40f, headingDegrees = 123f)
                 .toControlledAttitude()
 
-        assertEquals(4f, controlled.pitchDegrees, 0.001f)
-        assertEquals(-8f, controlled.rollDegrees, 0.001f)
+        assertEquals(-1.5f, controlled.pitchDegrees, 0.001f)
+        assertEquals(3f, controlled.rollDegrees, 0.001f)
         assertEquals(123f, controlled.headingDegrees, 0.001f)
     }
 
@@ -119,8 +119,8 @@ class PalmSpringTest {
                 .toControlledAttitude()
         val rotation = attitudeBallRotation(controlled)
 
-        assertEquals(4f, rotation.pitch, 0.001f)
+        assertEquals(-1.5f, rotation.pitch, 0.001f)
         assertEquals(0f, rotation.yaw, 0.001f)
-        assertEquals(-7f, rotation.roll, 0.001f)
+        assertEquals(2.625f, rotation.roll, 0.001f)
     }
 }

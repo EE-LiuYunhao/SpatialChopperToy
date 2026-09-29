@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.anycontroller.library.AnyController
+import com.example.anycontroller.library.model.AnyControllerStatus
+import com.example.anycontroller.library.model.CalibrationState
 import com.pico.spatial.core.annotation.RequiredFullSpace
 import com.pico.spatial.core.ecs.Entity
 import com.pico.spatial.core.ecs.LookAtComponent
@@ -49,6 +52,10 @@ private const val PALM_OFFSET_METERS = 0.10f
 private const val FINGER_FORWARD_OFFSET_METERS = 0.20f
 private const val LAUNCH_PANEL_WIDTH_METERS = 0.32f
 private const val LAUNCH_PANEL_HEIGHT_METERS = 0.15f
+private const val SETUP_PANEL_WIDTH_METERS = 0.56f
+private const val SETUP_PANEL_HEIGHT_METERS = 0.34f
+private const val SETUP_PANEL_DISTANCE_METERS = 0.85f
+private const val SETUP_PANEL_VERTICAL_OFFSET_METERS = -0.05f
 private const val HEADING_PANEL_WIDTH_METERS = 0.105f
 private const val HEADING_PANEL_HEIGHT_METERS = 0.105f
 private const val GAUGE_SIDE_OFFSET_METERS = 0.105f
@@ -58,7 +65,7 @@ private const val ATTITUDE_FILTER_TIME_CONSTANT_SECONDS = 0.12f
 private const val ATTITUDE_MAX_ANGULAR_SPEED_DEGREES_PER_SECOND = 180f
 private val PALM_LOCAL_OFFSET = Vector3.UP * PALM_OFFSET_METERS
 
-/** Hosts the palm instruments, draggable helicopter, plane colliders, and flight state machine. */
+/** Hosts launch-time mode selection, both controller lifecycles, and the helicopter scene. */
 @RequiredFullSpace
 @Composable
 fun HomeStage() {
@@ -70,14 +77,18 @@ fun HomeStage() {
         hmdTrackingProvider.dataFlow.collectAsState(
             initial = HMDTrackingData(HMDPose(Vector3.ZERO, Quat.identity()), 0L)
         )
+    val calibrationState by
+        AnyController.calibrationState.collectAsState(initial = CalibrationState.STOPPED)
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val physicalLengthConverter = LocalPhysicalLengthConverter.current
     val stageUi = rememberHomeStageUi()
     val instrumentScene = rememberPalmInstrumentScene(stageUi)
     val stageScene = rememberHomeStageScene(stageUi, instrumentScene)
+    val controlMode = stageUi.controlMode.value
 
     TrackSpatialInputs(
+        controlMode = controlMode,
         handTrackingProvider = handTrackingProvider,
         hmdTrackingProvider = hmdTrackingProvider,
         stageScene = stageScene,
@@ -105,19 +116,36 @@ fun HomeStage() {
         update = { _, _ ->
             if (hmdTrackingData.hmdPose.position != Vector3.ZERO) {
                 stageScene.helicopterController.updateHmdPose(hmdTrackingData.hmdPose)
+                stageScene.setupPanelPlacer.placeIfNeeded(hmdTrackingData.hmdPose)
             }
-            stageScene.instrumentUpdater.update(handTrackingData)
+            controlMode?.let(stageScene.helicopterController::selectControlMode)
+            stageUi.setupPanelEntity.enabled =
+                stageScene.setupPanelPlacer.isPlaced &&
+                    (controlMode == null ||
+                        (controlMode == FlightControlMode.RC_DRONE &&
+                            calibrationState != CalibrationState.READY))
+            when (controlMode) {
+                FlightControlMode.REALISTIC -> stageScene.instrumentUpdater.update(handTrackingData)
+                FlightControlMode.RC_DRONE -> {
+                    stageScene.instrumentUpdater.hide()
+                    stageScene.helicopterController.updateRcControl(AnyController.latestFrame)
+                }
+                null -> stageScene.instrumentUpdater.hide()
+            }
         },
     ) { content, _ ->
         content.addEntity(instrumentScene.sceneRoot)
         stageScene.helicopterController.initialize(content)
+        AnyController.attachOverlay(content)
     }
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun rememberHomeStageUi(): HomeStageUi {
     val instrumentReadout = remember { mutableStateOf(InstrumentReadout.ZERO) }
     val flightUiState = remember { mutableStateOf(FlightUiState()) }
+    val controlMode = remember { mutableStateOf<FlightControlMode?>(null) }
     val controllerHolder = remember { HelicopterControllerHolder() }
 
     val launchPanelComponent =
@@ -126,7 +154,29 @@ private fun rememberHomeStageUi(): HomeStageUi {
         ) {
             HelicopterLaunchPanel(
                 crashed = flightUiState.value.crashed,
+                controlMode = flightUiState.value.controlMode,
+                controlReady = flightUiState.value.controlReady,
                 onStart = { controllerHolder.value?.startFlight() },
+            )
+        }
+    val setupPanelComponent =
+        attachmentPanelComponent(
+            size = panelSize(SETUP_PANEL_WIDTH_METERS, SETUP_PANEL_HEIGHT_METERS)
+        ) {
+            val status by AnyController.status.collectAsState(initial = AnyControllerStatus.STOPPED)
+            val calibration by
+                AnyController.calibrationState.collectAsState(initial = CalibrationState.STOPPED)
+            val surfaceCount by AnyController.detectedSurfaceCount.collectAsState(initial = 0)
+            ControllerSetupPanel(
+                controlMode = controlMode.value,
+                controllerStatus = status,
+                calibrationState = calibration,
+                detectedSurfaceCount = surfaceCount,
+                onModeSelected = { selectedMode ->
+                    if (controlMode.value == null) {
+                        controlMode.value = selectedMode
+                    }
+                },
             )
         }
     val headingPanelComponent =
@@ -167,20 +217,39 @@ private fun rememberHomeStageUi(): HomeStageUi {
                 )
             }
         }
+    val setupPanelEntity =
+        remember(setupPanelComponent) {
+            Entity().apply {
+                setName("FlightControlModeSetupPanel")
+                components.set(setupPanelComponent)
+                val lookAtComponent =
+                    LookAtComponent().apply {
+                        alignLocalUpToWorldUp = true
+                        lookAtForwardDirection = LookAtForwardDirection.POSITIVE_Z
+                    }
+                components.set(lookAtComponent)
+                lookAtComponent.setViewerAsTarget()
+                enabled = false
+            }
+        }
 
     return remember(
         instrumentReadout,
         flightUiState,
+        controlMode,
         controllerHolder,
         launchPanelEntity,
         headingPanelEntity,
+        setupPanelEntity,
     ) {
         HomeStageUi(
             instrumentReadout = instrumentReadout,
             flightUiState = flightUiState,
+            controlMode = controlMode,
             controllerHolder = controllerHolder,
             launchPanelEntity = launchPanelEntity,
             headingPanelEntity = headingPanelEntity,
+            setupPanelEntity = setupPanelEntity,
         )
     }
 }
@@ -214,6 +283,7 @@ private fun rememberPalmInstrumentScene(stageUi: HomeStageUi): PalmInstrumentSce
                     }
                 )
                 addChild(gaugeEntity)
+                addChild(stageUi.setupPanelEntity)
             }
         }
 
@@ -264,49 +334,32 @@ private fun rememberHomeStageScene(
                 onPalmControlChanged = helicopterController::updatePalmControl,
             )
         }
+    val setupPanelPlacer =
+        remember(instrumentScene.sceneRoot, stageUi.setupPanelEntity) {
+            SetupPanelPlacer(instrumentScene.sceneRoot, stageUi.setupPanelEntity)
+        }
 
-    return remember(helicopterController, instrumentUpdater) {
+    return remember(helicopterController, instrumentUpdater, setupPanelPlacer) {
         HomeStageScene(
             sceneRoot = instrumentScene.sceneRoot,
             helicopterController = helicopterController,
             instrumentUpdater = instrumentUpdater,
+            setupPanelPlacer = setupPanelPlacer,
         )
     }
 }
 
 @Composable
 private fun TrackSpatialInputs(
+    controlMode: FlightControlMode?,
     handTrackingProvider: HandTrackingProvider,
     hmdTrackingProvider: HMDTrackingProvider,
     stageScene: HomeStageScene,
     coroutineScope: CoroutineScope,
 ) {
     val helicopterController = stageScene.helicopterController
-    DisposableEffect(handTrackingProvider, hmdTrackingProvider, stageScene, coroutineScope) {
-        val planeSubscription =
-            PlaneTrackingManager.subscribeAnchorUpdate { update ->
-                when (update.event) {
-                    AnchorUpdate.Event.ADDED,
-                    AnchorUpdate.Event.UPDATED,
-                    AnchorUpdate.Event.LOADED ->
-                        helicopterController.addOrUpdatePlane(update.anchor)
-                    AnchorUpdate.Event.REMOVED ->
-                        helicopterController.removePlane(update.anchor.anchorUUID)
-                    AnchorUpdate.Event.UNKNOWN -> Unit
-                }
-            }
-
-        var handTrackingStarted = false
+    DisposableEffect(hmdTrackingProvider, stageScene) {
         var hmdTrackingStarted = false
-        var planeTrackingStarted = false
-        var planeLoadJob: Job? = null
-
-        runCatching {
-                handTrackingProvider.start()
-                handTrackingStarted = true
-                Log.i(TAG, "Hand tracking started")
-            }
-            .onFailure { Log.e(TAG, "Unable to start hand tracking", it) }
 
         runCatching {
                 hmdTrackingProvider.start()
@@ -315,12 +368,66 @@ private fun TrackSpatialInputs(
             }
             .onFailure { Log.e(TAG, "Unable to start HMD tracking", it) }
 
-        runCatching {
-                PlaneTrackingManager.start()
-                planeTrackingStarted = true
-                Log.i(TAG, "Plane tracking started")
+        onDispose {
+            if (hmdTrackingStarted) hmdTrackingProvider.stop()
+            AnyController.stop()
+            AnyController.detachOverlay()
+            helicopterController.destroy()
+            stageScene.sceneRoot.destroy()
+            Log.i(TAG, "HMD tracking stopped and helicopter scene destroyed")
+        }
+    }
+
+    DisposableEffect(controlMode, handTrackingProvider, helicopterController, coroutineScope) {
+        if (controlMode == null) {
+            onDispose {}
+        } else {
+            val planeSubscription =
+                PlaneTrackingManager.subscribeAnchorUpdate { update ->
+                    when (update.event) {
+                        AnchorUpdate.Event.ADDED,
+                        AnchorUpdate.Event.UPDATED,
+                        AnchorUpdate.Event.LOADED ->
+                            helicopterController.addOrUpdatePlane(update.anchor)
+                        AnchorUpdate.Event.REMOVED ->
+                            helicopterController.removePlane(update.anchor.anchorUUID)
+                        AnchorUpdate.Event.UNKNOWN -> Unit
+                    }
+                }
+            var handTrackingStarted = false
+            var planeTrackingStarted = false
+            var planeLoadJob: Job? = null
+
+            when (controlMode) {
+                FlightControlMode.REALISTIC -> {
+                    runCatching {
+                            handTrackingProvider.start()
+                            handTrackingStarted = true
+                            Log.i(TAG, "Realistic-mode hand tracking started")
+                        }
+                        .onFailure { Log.e(TAG, "Unable to start hand tracking", it) }
+                    runCatching {
+                            PlaneTrackingManager.start()
+                            planeTrackingStarted = true
+                            Log.i(TAG, "Realistic-mode plane tracking started")
+                        }
+                        .onFailure { Log.e(TAG, "Unable to start plane tracking", it) }
+                }
+                FlightControlMode.RC_DRONE -> {
+                    planeLoadJob =
+                        coroutineScope.launch {
+                            runCatching { AnyController.start() }
+                                .onSuccess { Log.i(TAG, "RC controller tracking started") }
+                                .onFailure { Log.e(TAG, "Unable to start RC controller", it) }
+                        }
+                }
+            }
+
+            if (planeTrackingStarted || controlMode == FlightControlMode.RC_DRONE) {
+                val startJob = planeLoadJob
                 planeLoadJob =
                     coroutineScope.launch {
+                        startJob?.join()
                         runCatching { PlaneTrackingManager.loadAllAnchors() }
                             .onSuccess { anchors ->
                                 anchors.forEach(helicopterController::addOrUpdatePlane)
@@ -329,17 +436,18 @@ private fun TrackSpatialInputs(
                             .onFailure { Log.e(TAG, "Unable to load existing plane anchors", it) }
                     }
             }
-            .onFailure { Log.e(TAG, "Unable to start plane tracking", it) }
 
-        onDispose {
-            planeLoadJob?.cancel()
-            planeSubscription.cancel()
-            if (planeTrackingStarted) PlaneTrackingManager.stop()
-            if (hmdTrackingStarted) hmdTrackingProvider.stop()
-            if (handTrackingStarted) handTrackingProvider.stop()
-            helicopterController.destroy()
-            stageScene.sceneRoot.destroy()
-            Log.i(TAG, "Tracking stopped and helicopter scene destroyed")
+            onDispose {
+                planeLoadJob?.cancel()
+                planeSubscription.cancel()
+                when (controlMode) {
+                    FlightControlMode.REALISTIC -> {
+                        if (planeTrackingStarted) PlaneTrackingManager.stop()
+                        if (handTrackingStarted) handTrackingProvider.stop()
+                    }
+                    FlightControlMode.RC_DRONE -> AnyController.stop()
+                }
+            }
         }
     }
 }
@@ -351,6 +459,14 @@ private class PalmInstrumentUpdater(
     private val onReadoutChanged: (InstrumentReadout) -> Unit,
     private val onPalmControlChanged: (PalmFlightControl?) -> Unit,
 ) {
+    /** Hides palm-only instruments while no palm-driven controller is active. */
+    fun hide() {
+        scene.gaugeEntity.enabled = false
+        dynamics.spring.clear()
+        dynamics.attitudeFilter.reset()
+        dynamics.frameClock.reset()
+    }
+
     fun update(handTrackingData: HandTrackingData) {
         val leftPalm = handTrackingData.left.validPalm()
         val rightPalm = handTrackingData.right.validPalm()
@@ -426,9 +542,11 @@ private class PalmInstrumentUpdater(
 private data class HomeStageUi(
     val instrumentReadout: MutableState<InstrumentReadout>,
     val flightUiState: MutableState<FlightUiState>,
+    val controlMode: MutableState<FlightControlMode?>,
     val controllerHolder: HelicopterControllerHolder,
     val launchPanelEntity: Entity,
     val headingPanelEntity: Entity,
+    val setupPanelEntity: Entity,
 )
 
 private data class PalmInstrumentScene(
@@ -448,10 +566,36 @@ private data class HomeStageScene(
     val sceneRoot: Entity,
     val helicopterController: HelicopterSceneController,
     val instrumentUpdater: PalmInstrumentUpdater,
+    val setupPanelPlacer: SetupPanelPlacer,
 )
 
 private class HelicopterControllerHolder {
     var value: HelicopterSceneController? = null
+}
+
+private class SetupPanelPlacer(private val sceneRoot: Entity, private val panelEntity: Entity) {
+    private var placed = false
+
+    val isPlaced: Boolean
+        get() = placed
+
+    fun placeIfNeeded(hmdPose: HMDPose) {
+        if (placed) return
+        val horizontalForward =
+            hmdPose.rotation
+                .rotateVector(Vector3(0f, 0f, -1f))
+                .let { Vector3(it.x, 0f, it.z) }
+                .takeIf { it.length() > 0.001f }
+                ?.normalize() ?: return
+        val globalPosition =
+            hmdPose.position +
+                horizontalForward * SETUP_PANEL_DISTANCE_METERS +
+                Vector3.UP * SETUP_PANEL_VERTICAL_OFFSET_METERS
+        panelEntity.components[TransformComponent::class.java]?.setPosition(
+            sceneRoot.convertPositionFrom(globalPosition, null)
+        )
+        placed = true
+    }
 }
 
 private fun HandPose?.validPalm(): HandJoint? {
