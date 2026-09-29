@@ -99,46 +99,18 @@ class HelicopterFlightTest {
     }
 
     @Test
-    fun gentleBottomContactOnUpwardPlaneIsSafe() {
+    fun everyTrackedPlaneContactEndsOnlyAnActiveFlight() {
         assertTrue(
-            isSafeLandingContact(
-                planeIsHorizontalUpward = true,
-                localContactHeightsMeters = listOf(-0.074f, -0.078f),
-                downwardSpeedMetersPerSecond = 0.8f,
+            shouldCrashOnTrackedPlane(mode = FlightMode.RUNNING, collidedWithTrackedPlane = true)
+        )
+        assertFalse(
+            shouldCrashOnTrackedPlane(
+                mode = FlightMode.NOT_RUNNING,
+                collidedWithTrackedPlane = true,
             )
         )
-    }
-
-    @Test
-    fun sideContactIsCrash() {
         assertFalse(
-            isSafeLandingContact(
-                planeIsHorizontalUpward = true,
-                localContactHeightsMeters = listOf(0f),
-                downwardSpeedMetersPerSecond = 0.2f,
-            )
-        )
-    }
-
-    @Test
-    fun fastBottomContactIsCrash() {
-        assertFalse(
-            isSafeLandingContact(
-                planeIsHorizontalUpward = true,
-                localContactHeightsMeters = listOf(-HELICOPTER_HALF_HEIGHT_METERS),
-                downwardSpeedMetersPerSecond = SAFE_LANDING_SPEED_METERS_PER_SECOND + 0.01f,
-            )
-        )
-    }
-
-    @Test
-    fun contactWithWallIsCrashEvenAtBottom() {
-        assertFalse(
-            isSafeLandingContact(
-                planeIsHorizontalUpward = false,
-                localContactHeightsMeters = listOf(-HELICOPTER_HALF_HEIGHT_METERS),
-                downwardSpeedMetersPerSecond = 0.1f,
-            )
+            shouldCrashOnTrackedPlane(mode = FlightMode.RUNNING, collidedWithTrackedPlane = false)
         )
     }
 
@@ -212,7 +184,7 @@ class HelicopterFlightTest {
     }
 
     @Test
-    fun calibrationUsesOneTwentiethCyclicAndShortestPathYawDeltas() {
+    fun calibrationInvertsCyclicAtThreeFortiethsAndUsesShortestPathYaw() {
         val calibration = PalmFlightCalibration()
         calibration.calibrate(palm = PalmFlightControl(1f, 10f, 175f, 350f))
 
@@ -228,11 +200,11 @@ class HelicopterFlightTest {
                 )
             )
 
-        assertEquals(0.5f, result.instrumentReadout.pitchDegrees, 0.001f)
-        assertEquals(0.5f, result.instrumentReadout.rollDegrees, 0.001f)
+        assertEquals(-0.75f, result.instrumentReadout.pitchDegrees, 0.001f)
+        assertEquals(-0.75f, result.instrumentReadout.rollDegrees, 0.001f)
         assertEquals(20f, result.instrumentReadout.headingDegrees, 0.001f)
-        assertEquals(0.5f, result.helicopterControl.pitchDegrees, 0.001f)
-        assertEquals(0.5f, result.helicopterControl.rollDegrees, 0.001f)
+        assertEquals(-0.75f, result.helicopterControl.pitchDegrees, 0.001f)
+        assertEquals(-0.75f, result.helicopterControl.rollDegrees, 0.001f)
         assertEquals(20f, result.helicopterControl.headingDegrees, 0.001f)
     }
 
@@ -275,7 +247,7 @@ class HelicopterFlightTest {
             )
 
         assertEquals(18f, command.attitude.pitchDegrees, 0.001f)
-        assertEquals(-12f, command.attitude.rollDegrees, 0.001f)
+        assertEquals(12f, command.attitude.rollDegrees, 0.001f)
         assertEquals(1.5f, command.attitude.headingDegrees, 0.001f)
         assertEquals(3f, command.liftNewtons, 0.001f)
     }
@@ -346,7 +318,7 @@ class HelicopterFlightTest {
             )
 
         assertEquals(-20f, clamped.attitude.pitchDegrees, 0f)
-        assertEquals(20f, clamped.attitude.rollDegrees, 0f)
+        assertEquals(-20f, clamped.attitude.rollDegrees, 0f)
         assertEquals(2f, clamped.attitude.headingDegrees, 0.001f)
         assertEquals(0f, clamped.liftNewtons, 0f)
         assertEquals(0f, reset.attitude.headingDegrees, 0f)
@@ -388,45 +360,75 @@ class HelicopterFlightTest {
     }
 
     @Test
-    fun levelNeutralLiftExactlyOpposesConfiguredGravity() {
-        val force =
-            calculateHelicopterAerodynamicForce(
-                bodyUp = Vector3.UP,
+    fun levelNeutralLiftProducesNoNetForceOrVelocity() {
+        val motion =
+            solveHelicopterMotion(
+                attitude = HelicopterAttitudeCommand(0f, 0f, 0f),
                 liftNewtons = NEUTRAL_LIFT_NEWTONS,
-                velocityMetersPerSecond = Vector3.ZERO,
+                flightStartHeadingDegrees = 37f,
             )
 
-        assertEquals(0f, force.x, 0.0001f)
-        assertEquals(NEUTRAL_LIFT_NEWTONS, force.y, 0.0001f)
-        assertEquals(0f, force.z, 0.0001f)
+        assertVectorEquals(Vector3.UP, motion.localLiftDirection)
+        assertVectorEquals(Vector3.ZERO, motion.localNetForceNewtons)
+        assertVectorEquals(Vector3.ZERO, motion.localVelocityMetersPerSecond)
+        assertVectorEquals(Vector3.ZERO, motion.worldVelocityMetersPerSecond)
     }
 
     @Test
-    fun tiltedLiftNaturallySplitsIntoVerticalAndHorizontalComponents() {
-        val sixtyDegrees = Math.sqrt(0.75).toFloat()
-        val force =
-            calculateHelicopterAerodynamicForce(
-                bodyUp = Vector3(0.5f, sixtyDegrees, 0f),
+    fun pitchAndRollAreCombinedIntoOneThreeDimensionalLiftDirection() {
+        val motion =
+            solveHelicopterMotion(
+                attitude = HelicopterAttitudeCommand(30f, -30f, 0f),
                 liftNewtons = NEUTRAL_LIFT_NEWTONS,
-                velocityMetersPerSecond = Vector3.ZERO,
+                flightStartHeadingDegrees = 0f,
             )
 
-        assertEquals(NEUTRAL_LIFT_NEWTONS * 0.5f, force.x, 0.0001f)
-        assertEquals(NEUTRAL_LIFT_NEWTONS * sixtyDegrees, force.y, 0.0001f)
-        assertEquals(0f, force.z, 0.0001f)
+        assertEquals(1f, motion.localLiftDirection.length(), 0.0001f)
+        assertTrue(motion.localLiftDirection.x > 0f)
+        assertTrue(motion.localLiftDirection.y > 0f)
+        assertTrue(motion.localLiftDirection.z > 0f)
+        assertTrue(motion.localVelocityMetersPerSecond.x > 0f)
+        assertTrue(motion.localVelocityMetersPerSecond.y < 0f)
+        assertTrue(motion.localVelocityMetersPerSecond.z > 0f)
     }
 
     @Test
-    fun aerodynamicDragOpposesHorizontalAndVerticalVelocity() {
-        val force =
-            calculateHelicopterAerodynamicForce(
-                bodyUp = Vector3.UP,
-                liftNewtons = 0f,
-                velocityMetersPerSecond = Vector3(2f, -1f, -1f),
+    fun collectiveChangesVerticalVelocityAroundNeutralHover() {
+        val raised =
+            solveHelicopterMotion(
+                attitude = HelicopterAttitudeCommand(0f, 0f, 0f),
+                liftNewtons = NEUTRAL_LIFT_NEWTONS * 1.2f,
+                flightStartHeadingDegrees = 0f,
+            )
+        val lowered =
+            solveHelicopterMotion(
+                attitude = HelicopterAttitudeCommand(0f, 0f, 0f),
+                liftNewtons = NEUTRAL_LIFT_NEWTONS * 0.8f,
+                flightStartHeadingDegrees = 0f,
             )
 
-        assertTrue(force.x < 0f)
-        assertTrue(force.y > 0f)
-        assertTrue(force.z > 0f)
+        assertTrue(raised.worldVelocityMetersPerSecond.y > 0f)
+        assertTrue(lowered.worldVelocityMetersPerSecond.y < 0f)
+    }
+
+    @Test
+    fun yawRotatesLocalFlightVelocityIntoStageSpace() {
+        val motion =
+            solveHelicopterMotion(
+                attitude = HelicopterAttitudeCommand(30f, 0f, 90f),
+                liftNewtons = NEUTRAL_LIFT_NEWTONS,
+                flightStartHeadingDegrees = 0f,
+            )
+
+        assertEquals(0f, motion.localVelocityMetersPerSecond.x, 0.0001f)
+        assertTrue(motion.localVelocityMetersPerSecond.z > 0f)
+        assertTrue(motion.worldVelocityMetersPerSecond.x > 0f)
+        assertEquals(0f, motion.worldVelocityMetersPerSecond.z, 0.0001f)
+    }
+
+    private fun assertVectorEquals(expected: Vector3, actual: Vector3, tolerance: Float = 0.0001f) {
+        assertEquals(expected.x, actual.x, tolerance)
+        assertEquals(expected.y, actual.y, tolerance)
+        assertEquals(expected.z, actual.z, tolerance)
     }
 }

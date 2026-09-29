@@ -17,12 +17,6 @@ internal const val GRAVITY_METERS_PER_SECOND_SQUARED = 9.81f
 internal const val NEUTRAL_LIFT_NEWTONS =
     HELICOPTER_MASS_KILOGRAMS * GRAVITY_METERS_PER_SECOND_SQUARED
 
-/** Maximum downward impact speed accepted as a safe landing. */
-internal const val SAFE_LANDING_SPEED_METERS_PER_SECOND = 1.25f
-
-/** Half of the helicopter collision body's vertical extent. */
-internal const val HELICOPTER_HALF_HEIGHT_METERS = 0.075f
-
 /** Maximum pitch or roll command accepted from the palm cyclic input. */
 internal const val MAX_CYCLIC_TILT_DEGREES = 30f
 
@@ -32,16 +26,16 @@ internal const val CYCLIC_SLEW_RATE_DEGREES_PER_SECOND = 75f
 /** Maximum local yaw rate commanded by a fully displaced RC left pad. */
 internal const val RC_YAW_RATE_DEGREES_PER_SECOND = 90f
 
-/** Low-speed horizontal rotor and airframe drag in newton-seconds per meter. */
+/** Low-speed horizontal air-resistance coefficient in newton-seconds per meter. */
 internal const val HORIZONTAL_LINEAR_DRAG_NEWTON_SECONDS_PER_METER = 0.32f
 
-/** High-speed horizontal parasitic-drag coefficient in newton-seconds squared per meter squared. */
+/** High-speed horizontal air-resistance coefficient in newton-seconds squared per meter squared. */
 internal const val HORIZONTAL_QUADRATIC_DRAG_NEWTON_SECONDS_SQUARED_PER_METER_SQUARED = 0.16f
 
-/** Low-speed vertical rotor and airframe drag in newton-seconds per meter. */
+/** Low-speed vertical air-resistance coefficient in newton-seconds per meter. */
 internal const val VERTICAL_LINEAR_DRAG_NEWTON_SECONDS_PER_METER = 0.18f
 
-/** High-speed vertical parasitic-drag coefficient in newton-seconds squared per meter squared. */
+/** High-speed vertical air-resistance coefficient in newton-seconds squared per meter squared. */
 internal const val VERTICAL_QUADRATIC_DRAG_NEWTON_SECONDS_SQUARED_PER_METER_SQUARED = 0.08f
 
 /** The complete runtime state machine for the helicopter. */
@@ -105,9 +99,11 @@ internal data class RcFlightCommand(val attitude: HelicopterAttitudeCommand, val
 /**
  * Maps the two AnyController pads to a conventional RC Mode-2 flight command.
  *
- * Left X integrates local yaw, left Y controls collective around hover, right X controls roll, and
- * right Y controls pitch. Missing tracking or an inactive pad neutralizes that pad instead of
- * retaining stale input.
+ * Left X integrates local yaw, left Y controls collective around hover, right X controls lateral
+ * bank, and right Y controls longitudinal pitch. The Spatial SDK's positive roll rotates body-up
+ * toward local left, so right-pad X is inverted to make a rightward finger slide bank and travel to
+ * aircraft-right. Missing tracking or an inactive pad neutralizes that pad instead of retaining
+ * stale input.
  */
 internal class RcFlightController(
     private val maximumCyclicTiltDegrees: Float = MAX_CYCLIC_TILT_DEGREES,
@@ -148,7 +144,7 @@ internal class RcFlightController(
             attitude =
                 HelicopterAttitudeCommand(
                     pitchDegrees = right.y.coerceIn(-1f, 1f) * maximumCyclicTiltDegrees,
-                    rollDegrees = right.x.coerceIn(-1f, 1f) * maximumCyclicTiltDegrees,
+                    rollDegrees = -right.x.coerceIn(-1f, 1f) * maximumCyclicTiltDegrees,
                     headingDegrees = headingDegrees,
                 ),
             liftNewtons = neutralLiftNewtons * liftMultiplier,
@@ -171,6 +167,14 @@ internal data class HelicopterAttitudeCommand(
     val headingDegrees: Float,
 )
 
+/** Trigonometric lift decomposition and drag-limited velocity for one controller frame. */
+internal data class HelicopterMotionSolution(
+    val localLiftDirection: Vector3,
+    val localNetForceNewtons: Vector3,
+    val localVelocityMetersPerSecond: Vector3,
+    val worldVelocityMetersPerSecond: Vector3,
+)
+
 /** Calibrated commands shared by the cockpit instruments and helicopter controller. */
 internal data class CalibratedPalmFlightControl(
     val instrumentReadout: InstrumentReadout,
@@ -181,9 +185,10 @@ internal data class CalibratedPalmFlightControl(
  * Converts absolute palm tracking into start-relative cockpit and helicopter commands.
  *
  * START or RESTART captures the current palm pose as zero. Subsequent palm pitch, roll, and yaw are
- * shortest-path deltas from that sample; cyclic deltas use the shared one-twentieth control gain,
- * while yaw remains one-to-one. The scene controller composes these deltas after the helicopter's
- * flight-start quaternion so every control axis is local to the aircraft.
+ * shortest-path deltas from that sample. Palm pitch/roll use the aircraft-facing inverse sign and
+ * the shared three-fortieths control gain, while yaw remains one-to-one. The scene controller
+ * composes these deltas after the helicopter's level flight-start heading so every control axis is
+ * local to the aircraft.
  */
 internal class PalmFlightCalibration {
     private var palmAtStart: PalmFlightControl? = null
@@ -204,11 +209,9 @@ internal class PalmFlightCalibration {
         val reference = palmAtStart ?: return null
         palm ?: return null
         val pitchDelta =
-            shortestSignedAngleDelta(reference.pitchDegrees, palm.pitchDegrees) *
-                PALM_ATTITUDE_CONTROL_GAIN
+            mapPalmCyclicAngle(shortestSignedAngleDelta(reference.pitchDegrees, palm.pitchDegrees))
         val rollDelta =
-            shortestSignedAngleDelta(reference.rollDegrees, palm.rollDegrees) *
-                PALM_ATTITUDE_CONTROL_GAIN
+            mapPalmCyclicAngle(shortestSignedAngleDelta(reference.rollDegrees, palm.rollDegrees))
         val headingDelta = shortestSignedAngleDelta(reference.headingDegrees, palm.headingDegrees)
 
         return CalibratedPalmFlightControl(
@@ -321,37 +324,60 @@ internal class HelicopterAttitudeController(
 }
 
 /**
- * Calculates the non-gravity force applied to the helicopter rigid body.
+ * Resolves one attitude and collective frame into a drag-limited world-space velocity.
  *
- * Rotor lift always follows body-up. Linear rotor damping dominates near hover and quadratic
- * parasitic drag grows with airspeed, preventing a small sustained tilt from accelerating forever.
- * The Spatial physics world applies gravity separately.
+ * Pitch and roll are composed once to rotate local body-up, naturally decomposing rotor lift into
+ * lateral, vertical, and longitudinal components. Local gravity is then added to the lift force.
+ * Rather than integrating acceleration, each net-force component is converted to its terminal
+ * velocity by solving `quadraticDrag * v² + linearDrag * v = |force|`. Finally, the aircraft's
+ * level heading rotates that local velocity into Stage space; translation is intentionally not
+ * applied because velocity is a vector, not a point.
  */
-internal fun calculateHelicopterAerodynamicForce(
-    bodyUp: Vector3,
+internal fun solveHelicopterMotion(
+    attitude: HelicopterAttitudeCommand,
     liftNewtons: Float,
-    velocityMetersPerSecond: Vector3,
+    flightStartHeadingDegrees: Float,
+    massKilograms: Float = HELICOPTER_MASS_KILOGRAMS,
+    gravityMetersPerSecondSquared: Float = GRAVITY_METERS_PER_SECOND_SQUARED,
     horizontalLinearDrag: Float = HORIZONTAL_LINEAR_DRAG_NEWTON_SECONDS_PER_METER,
     horizontalQuadraticDrag: Float =
         HORIZONTAL_QUADRATIC_DRAG_NEWTON_SECONDS_SQUARED_PER_METER_SQUARED,
     verticalLinearDrag: Float = VERTICAL_LINEAR_DRAG_NEWTON_SECONDS_PER_METER,
     verticalQuadraticDrag: Float = VERTICAL_QUADRATIC_DRAG_NEWTON_SECONDS_SQUARED_PER_METER_SQUARED,
-): Vector3 {
+): HelicopterMotionSolution {
     require(liftNewtons >= 0f)
+    require(massKilograms > 0f)
+    require(gravityMetersPerSecondSquared >= 0f)
     require(horizontalLinearDrag >= 0f && horizontalQuadraticDrag >= 0f)
     require(verticalLinearDrag >= 0f && verticalQuadraticDrag >= 0f)
+    require(horizontalLinearDrag > 0f || horizontalQuadraticDrag > 0f)
+    require(verticalLinearDrag > 0f || verticalQuadraticDrag > 0f)
 
-    val bodyUpLength = vectorLength(bodyUp)
-    val liftDirection = if (bodyUpLength > 1e-6f) bodyUp * (1f / bodyUpLength) else Vector3.UP
-    val horizontalVelocity = Vector3(velocityMetersPerSecond.x, 0f, velocityMetersPerSecond.z)
-    val horizontalSpeed = vectorLength(horizontalVelocity)
-    val horizontalDrag =
-        horizontalVelocity * -(horizontalLinearDrag + horizontalQuadraticDrag * horizontalSpeed)
-    val verticalSpeed = velocityMetersPerSecond.y
-    val verticalDrag =
-        Vector3.UP *
-            (-verticalSpeed * (verticalLinearDrag + verticalQuadraticDrag * abs(verticalSpeed)))
-    return liftDirection * liftNewtons + horizontalDrag + verticalDrag
+    val localLiftDirection =
+        EulerAngles(pitch = attitude.pitchDegrees, roll = attitude.rollDegrees)
+            .toQuat()
+            .rotateVector(Vector3.UP)
+            .normalizedOrUp()
+    val localGravityForce = Vector3(0f, -massKilograms * gravityMetersPerSecondSquared, 0f)
+    val localNetForce = localLiftDirection * liftNewtons + localGravityForce
+    val localVelocity =
+        Vector3(
+            terminalVelocityForForce(
+                localNetForce.x,
+                horizontalLinearDrag,
+                horizontalQuadraticDrag,
+            ),
+            terminalVelocityForForce(localNetForce.y, verticalLinearDrag, verticalQuadraticDrag),
+            terminalVelocityForForce(localNetForce.z, horizontalLinearDrag, horizontalQuadraticDrag),
+        )
+    val worldHeading = flightStartHeadingDegrees + attitude.headingDegrees
+    val worldVelocity = EulerAngles(yaw = worldHeading).toQuat().rotateVector(localVelocity)
+    return HelicopterMotionSolution(
+        localLiftDirection = localLiftDirection,
+        localNetForceNewtons = localNetForce,
+        localVelocityMetersPerSecond = localVelocity,
+        worldVelocityMetersPerSecond = worldVelocity,
+    )
 }
 
 /** Pure control-state model kept separate from the SDK physics objects for deterministic tests. */
@@ -399,22 +425,11 @@ internal class HelicopterFlightModel(
     }
 }
 
-/** Classifies whether all reported contacts describe a sufficiently gentle bottom landing. */
-internal fun isSafeLandingContact(
-    planeIsHorizontalUpward: Boolean,
-    localContactHeightsMeters: List<Float>,
-    downwardSpeedMetersPerSecond: Float,
-    halfHeightMeters: Float = HELICOPTER_HALF_HEIGHT_METERS,
-    bottomContactToleranceMeters: Float = 0.012f,
-    safeLandingSpeedMetersPerSecond: Float = SAFE_LANDING_SPEED_METERS_PER_SECOND,
-): Boolean {
-    if (!planeIsHorizontalUpward || localContactHeightsMeters.isEmpty()) return false
-    val allContactsAtBottom =
-        localContactHeightsMeters.all { contactHeight ->
-            abs(contactHeight + halfHeightMeters) <= bottomContactToleranceMeters
-        }
-    return allContactsAtBottom && downwardSpeedMetersPerSecond <= safeLandingSpeedMetersPerSecond
-}
+/** Every tracked-plane contact ends an active flight and exposes the restart state. */
+internal fun shouldCrashOnTrackedPlane(
+    mode: FlightMode,
+    collidedWithTrackedPlane: Boolean,
+): Boolean = mode == FlightMode.RUNNING && collidedWithTrackedPlane
 
 /** Returns the shortest signed angular delta from [fromDegrees] to [toDegrees]. */
 internal fun shortestSignedAngleDelta(fromDegrees: Float, toDegrees: Float): Float {
@@ -434,3 +449,25 @@ internal fun normalizeSignedAngleDegrees(degrees: Float): Float {
 
 private fun vectorLength(vector: Vector3): Float =
     sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)
+
+private fun Vector3.normalizedOrUp(): Vector3 {
+    val length = vectorLength(this)
+    return if (length > 1e-6f) this * (1f / length) else Vector3.UP
+}
+
+private fun terminalVelocityForForce(
+    forceNewtons: Float,
+    linearDrag: Float,
+    quadraticDrag: Float,
+): Float {
+    val magnitude = abs(forceNewtons)
+    if (magnitude <= 1e-6f) return 0f
+    val speed =
+        if (quadraticDrag <= 1e-6f) {
+            magnitude / linearDrag
+        } else {
+            (sqrt(linearDrag * linearDrag + 4f * quadraticDrag * magnitude) - linearDrag) /
+                (2f * quadraticDrag)
+        }
+    return if (forceNewtons < 0f) -speed else speed
+}

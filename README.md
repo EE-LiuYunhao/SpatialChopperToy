@@ -16,10 +16,9 @@ The helicopter has exactly two runtime states:
 - `NOT_RUNNING`: the helicopter is kinematic, has no gravity or lift, ignores flight controls, and
   can be dragged in three dimensions. Its attached SpatialUI panel exposes START only after the
   selected controller is ready. After a crash the panel displays the recovery message and RESTART.
-- `RUNNING`: drag interaction and the launch panel are disabled. Gravity is enabled, rotor lift
-  acts along the helicopter's body-up axis, and the selected controller drives local aircraft
-  attitude and collective. A crash freezes the helicopter at the impact site and returns it to
-  `NOT_RUNNING`.
+- `RUNNING`: drag interaction and the launch panel are disabled. The flight solver combines local
+  rotor lift with gravity, and the selected controller drives local aircraft attitude and
+  collective. A crash freezes the helicopter at the impact site and returns it to `NOT_RUNNING`.
 
 There is deliberately no Stop button, Exit button, stop transition, or alert dialog.
 
@@ -27,23 +26,36 @@ There is deliberately no Stop button, Exit button, stop transition, or alert dia
 
 - The helicopter initially appears approximately one meter in front of and 25 cm below the HMD.
 - The visual model and box collider share the same doubled scale.
-- Every tracked plane receives a collider. Gentle bottom contact with an upward horizontal plane is a landing; side contacts, non-horizontal contacts, and fast landings are crashes.
+- Every tracked plane receives a collider. Any helicopter contact with one while `RUNNING` is a
+  crash, including a slow level contact, so both control modes always return to the draggable
+  `NOT_RUNNING` state with the RESTART panel.
 - The launch/recovery panel is a child of the helicopter and faces the viewer.
 - The mode/setup panel is placed in front of the HMD at launch. In RC mode it remains visible with
   step-specific calibration guidance until both pads are ready.
 - Dragging uses a Spatial gesture targeted to the helicopter entity. The entity is interactable only in `NOT_RUNNING`.
 - Releasing or canceling a placement drag levels pitch and roll, then points the helicopter's tail toward the viewer from its new position.
-- Pressing START or RESTART captures the current filtered palm pitch, roll, and yaw as zero. The attitude ball and heading panel then display movement relative to that pose, eliminating the tracked hand's static roll bias. The helicopter preserves its current orientation as a quaternion baseline and composes the same palm deltas in aircraft-local space.
-- Filtered palm pitch and roll preserve the palm's direction and use `1/20` gain for both the attitude ball and helicopter cyclic control. Calibrated yaw remains one-to-one.
+- Pressing START or RESTART captures the current filtered palm pitch, roll, and yaw as zero. The
+  attitude ball and heading panel then display movement relative to that pose, eliminating the
+  tracked hand's static roll bias. The helicopter preserves its current heading, levels pitch and
+  roll, and composes subsequent control deltas in aircraft-local space.
+- Filtered palm pitch and roll invert the hand-tracking sign to match the helicopter's visible
+  rotation and use `3/40` gain for both the attitude ball and helicopter cyclic control. Calibrated
+  yaw remains one-to-one.
 - The palm height at START or RESTART is the neutral collective point. At that height, a level helicopter receives `mass * gravity` rotor lift. Collective gain is `0.11` lift-multiplier units per meter, which is one twentieth of the previous `2.2` mapping.
 - RC setup first renders detected planes. The left index fingertip selects a plane, after which all
   plane-discovery outlines are hidden. The user draws and lifts to size the left circle, touches its
   forward direction, then draws and lifts to size the right circle.
 - RC input is neutral at each pad center. Left-pad Y maps linearly from zero to twice hover lift,
-  left-pad X commands a local yaw rate of up to 90 degrees per second, right-pad Y commands pitch,
-  and right-pad X commands roll. Pitch and roll remain bounded to 30 degrees. Leaving a pad or
-  losing tracking immediately neutralizes that pad instead of holding stale commands.
-- Rotor lift is never converted into an arbitrary world-space translation. It points along body-up, so its vertical component fights gravity and its horizontal component accelerates the helicopter in the tilt direction. Explicit linear rotor damping plus quadratic parasitic air drag oppose velocity and keep a small sustained tilt from producing unbounded speed.
+  left-pad X commands a local yaw rate of up to 90 degrees per second, right-pad Y commands
+  longitudinal pitch, and right-pad X commands lateral bank in its visible travel direction. Pitch
+  and roll remain bounded to 30 degrees. Leaving a pad or losing tracking immediately neutralizes
+  that pad instead of holding stale commands.
+- Pitch and roll are composed together to rotate one unit body-up vector. Collective scales that
+  vector, then gravity is added in local coordinates. The solver converts the resulting 3D net
+  force directly to terminal velocity using linear-plus-quadratic air resistance and rotates that
+  velocity into Stage space using only the current heading. At neutral collective with level pitch
+  and roll, lift exactly cancels gravity and velocity is zero; tilting naturally trades vertical
+  lift for horizontal motion.
 
 ## Spatial audio
 
