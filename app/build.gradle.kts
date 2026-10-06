@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.pico.spatial.handycopter"
+    namespace = "com.pico.spatial.choppertoy"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pico.spatial.handycopter"
+        applicationId = "com.pico.spatial.choppertoy"
         minSdk = 35
         targetSdk = 35
         versionCode = 1
@@ -52,7 +52,6 @@ configure<DetektExtension> {
 }
 
 dependencies {
-    implementation(project(":anycontroller"))
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.spatial.bom))
     implementation(libs.spatial.core)

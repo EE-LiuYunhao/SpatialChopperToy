@@ -36,8 +36,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HandyCopter"
+rootProject.name = "Spatial Chopper Toy"
 
 include(":app")
-
-include(":anycontroller")

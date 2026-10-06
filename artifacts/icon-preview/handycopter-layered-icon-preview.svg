@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1800 1120" role="img" aria-labelledby="title description">
+  <title id="title">Spatial Chopper Toy layered launcher icon review board</title>
+  <desc id="description">A combined icon preview with separate rear and front layer views.</desc>
+  <defs>
+    <linearGradient id="board" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101B2C"/>
+      <stop offset="0.55" stop-color="#162842"/>
+      <stop offset="1" stop-color="#0C1524"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#253A58"/>
+      <stop offset="1" stop-color="#18283F"/>
+    </linearGradient>
+    <pattern id="checker" width="36" height="36" patternUnits="userSpaceOnUse">
+      <rect width="36" height="36" fill="#EAF0F5"/>
+      <path d="M0 0H18V18H0ZM18 18H36V36H18Z" fill="#D4DEE7"/>
+    </pattern>
+    <filter id="panelShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020812" flood-opacity="0.46"/>
+    </filter>
+  </defs>
+
+  <rect width="1800" height="1120" rx="54" fill="url(#board)"/>
+  <circle cx="143" cy="118" r="38" fill="#FFAA35"/>
+  <path d="M125 120C137 103 157 99 173 108C186 115 192 130 188 143C175 131 159 127 143 131L125 120Z" fill="#86DDF7" stroke="#0E2943" stroke-width="6"/>
+  <text x="205" y="105" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="48" font-weight="700">Spatial Chopper Toy</text>
+  <text x="205" y="150" fill="#AFC3D9" font-family="DejaVu Sans, Arial, sans-serif" font-size="25" letter-spacing="3">LAYERED ICON · SVG CONCEPT 01</text>
+
+  <g filter="url(#panelShadow)">
+    <rect x="80" y="210" width="980" height="820" rx="44" fill="url(#panel)" stroke="#3B5373" stroke-width="2"/>
+    <rect x="1100" y="210" width="620" height="385" rx="38" fill="url(#panel)" stroke="#3B5373" stroke-width="2"/>
+    <rect x="1100" y="645" width="620" height="385" rx="38" fill="url(#panel)" stroke="#3B5373" stroke-width="2"/>
+  </g>
+
+  <text x="132" y="282" fill="#D4E4F3" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="3">COMPOSITE</text>
+  <text x="1145" y="270" fill="#D4E4F3" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="3">BACK LAYER</text>
+  <text x="1145" y="705" fill="#D4E4F3" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="3">FRONT LAYER</text>
+
+  <circle cx="570" cy="639" r="333" fill="#0B1524" opacity="0.8"/>
+  <image x="216" y="285" width="708" height="708" xlink:href="handycopter-layer-0.png"/>
+  <image x="216" y="285" width="708" height="708" xlink:href="handycopter-layer-1.png"/>
+
+  <rect x="1175" y="295" width="470" height="260" rx="26" fill="#101B2B"/>
+  <image x="1270" y="288" width="280" height="280" xlink:href="handycopter-layer-0.png"/>
+
+  <rect x="1175" y="730" width="470" height="260" rx="26" fill="url(#checker)"/>
+  <image x="1270" y="720" width="280" height="280" xlink:href="handycopter-layer-1.png"/>
+
+  <g font-family="DejaVu Sans, Arial, sans-serif" font-size="20">
+    <circle cx="1192" cy="569" r="5" fill="#69C8F1"/>
+    <text x="1210" y="576" fill="#9FB7CD">sky / ground dial · palm silhouette</text>
+    <circle cx="1192" cy="1004" r="5" fill="#FFAA35"/>
+    <text x="1210" y="1011" fill="#9FB7CD">transparent layer · toy helicopter</text>
+  </g>
+</svg>

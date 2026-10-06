@@ -8,9 +8,10 @@
       "rule": "containment-evidence-incomplete"
     }
   ],
-  "kotlin_file_count": 1,
+  "kotlin_file_count": 2,
   "passed": true,
   "scan_inputs": [
+    "app/src/main/java/com/pico/spatial/choppertoy/content/HomeStage.kt",
     "app/src/main/java/com/pico/spatial/choppertoy/content/HelicopterSceneController.kt"
   ],
   "schema_version": 3,

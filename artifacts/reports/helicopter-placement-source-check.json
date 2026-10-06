@@ -2,7 +2,7 @@
   "advisories": [
     {
       "evidence": "import com.pico.spatial.core.container.SpatialViewContent",
-      "file": "app/src/main/java/com/pico/spatial/handycopter/content/HelicopterSceneController.kt",
+      "file": "app/src/main/java/com/pico/spatial/choppertoy/content/HelicopterSceneController.kt",
       "line": 4,
       "rationale": "The focused source contains containment logic but no visible named owner, epsilon, revision or size key; review whether another selected file supplies that evidence.",
       "rule": "containment-evidence-incomplete"
@@ -11,7 +11,7 @@
   "kotlin_file_count": 1,
   "passed": true,
   "scan_inputs": [
-    "app/src/main/java/com/pico/spatial/handycopter/content/HelicopterSceneController.kt"
+    "app/src/main/java/com/pico/spatial/choppertoy/content/HelicopterSceneController.kt"
   ],
   "schema_version": 3,
   "signals": {
