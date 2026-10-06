@@ -104,16 +104,3 @@ adb -s <device> install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s <device> shell am start -W \
   -n com.pico.spatial.choppertoy/.platform.LaunchActivity
 ```
-
-Spotless and Detekt mirror the SpatialAI repository configuration. Detekt has no baseline and fails
-on any finding. The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
-
-The 2026-10-05 gate passed the SpatialUI verifier (0 errors, 0 warnings), Spotless, Detekt, 43 unit
-tests, APK assembly, and Android Lint. PICO CLI 0.5.0 then cleanly reinstalled and launched the APK
-on `PB311XKGL4160042B`; the process stayed live, the helicopter and both spatial-audio resources
-loaded, the crash buffer remained empty, and a bounded 10-second watcher observed no crash. A
-physical safe-landing attempt still requires a worn-headset interaction pass; each collision now
-logs the horizontal-surface, below-body, alignment, and speed evidence needed for that pass.
-
-The packaged helicopter asset is `app/src/main/assets/helicopter.glb`; its attribution is in
-`helicopter.LICENSE.txt`. Audio attribution and source URLs are in `audio.LICENSE.md`.
