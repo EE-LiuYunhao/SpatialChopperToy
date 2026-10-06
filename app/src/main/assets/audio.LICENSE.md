@@ -1,4 +1,4 @@
-# HandyCopter audio assets
+# Spatial Chopper Toy audio assets
 
 The application bundles the following low-quality OGG previews downloaded from Freesound. Both source pages identify their sounds as Creative Commons 0 (CC0), which permits copying, modification, and redistribution without attribution. The metadata below is retained for provenance and credit.
 

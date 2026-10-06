@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Spatial Chopper Toy rear icon layer</title>
+  <desc id="description">A blue and brown attitude indicator with a stylized right-palm silhouette.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#73D2F6"/>
+      <stop offset="0.55" stop-color="#39A8E2"/>
+      <stop offset="1" stop-color="#187FC4"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B97A50"/>
+      <stop offset="0.52" stop-color="#915B3E"/>
+      <stop offset="1" stop-color="#633A2B"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="38%" cy="28%" r="72%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.52" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#061A2E" stop-opacity="0.18"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF4CA"/>
+      <stop offset="0.38" stop-color="#E8B94F"/>
+      <stop offset="0.72" stop-color="#A76122"/>
+      <stop offset="1" stop-color="#FFD978"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#051321" flood-opacity="0.38"/>
+    </filter>
+    <filter id="palmShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#2C170F" flood-opacity="0.42"/>
+    </filter>
+    <clipPath id="dialClip">
+      <circle cx="512" cy="512" r="388"/>
+    </clipPath>
+  </defs>
+
+  <!-- Keep the complete inscribed circle opaque as required for a PICO base icon layer. -->
+  <circle cx="512" cy="512" r="512" fill="#0B2239"/>
+  <circle cx="512" cy="526" r="418" fill="#061A2E" opacity="0.24" filter="url(#softShadow)"/>
+  <circle cx="512" cy="512" r="425" fill="url(#rim)"/>
+  <circle cx="512" cy="512" r="403" fill="#0B2239"/>
+
+  <g clip-path="url(#dialClip)">
+    <rect x="124" y="124" width="776" height="388" fill="url(#sky)"/>
+    <rect x="124" y="512" width="776" height="388" fill="url(#ground)"/>
+
+    <path d="M124 512H900" fill="none" stroke="#FFF4D2" stroke-width="14"/>
+    <path d="M124 526H900" fill="none" stroke="#44291F" stroke-opacity="0.5" stroke-width="4"/>
+
+    <g fill="none" stroke="#FFF8E7" stroke-linecap="round" opacity="0.9">
+      <path d="M314 392H418M606 392H710" stroke-width="11"/>
+      <path d="M348 433H431M593 433H676" stroke-width="8"/>
+      <path d="M376 472H443M581 472H648" stroke-width="6"/>
+      <path d="M376 552H443M581 552H648" stroke-width="6"/>
+      <path d="M348 591H431M593 591H676" stroke-width="8"/>
+      <path d="M314 632H418M606 632H710" stroke-width="11"/>
+    </g>
+
+    <g fill="#FFF8E7" opacity="0.9">
+      <circle cx="512" cy="392" r="6"/>
+      <circle cx="512" cy="432" r="5"/>
+      <circle cx="512" cy="472" r="4"/>
+      <circle cx="512" cy="552" r="4"/>
+      <circle cx="512" cy="592" r="5"/>
+      <circle cx="512" cy="632" r="6"/>
+    </g>
+
+    <path d="M204 512H316L350 535H449L472 512L449 489H350L316 512" fill="#FFD45A" stroke="#5A331D" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M820 512H708L674 535H575L552 512L575 489H674L708 512" fill="#FFD45A" stroke="#5A331D" stroke-width="10" stroke-linejoin="round"/>
+
+    <!-- Lengthen, foreshorten, and cant the palm for a natural side-supporting pose. -->
+    <g transform="translate(-106.2 0)">
+    <g transform="scale(1.18 1)">
+    <g transform="rotate(-8 590 650)">
+    <g transform="translate(0 208)">
+    <g transform="scale(1 0.68)">
+    <g transform="matrix(0 0.82 -0.82 0 1024.6 196.2)">
+    <path
+      d="M438 796
+         C439 748 434 703 416 661
+         L354 561
+         C341 539 347 512 368 500
+         C389 487 414 494 430 516
+         L461 558
+         L438 363
+         C434 333 454 309 482 307
+         C507 305 526 324 529 351
+         L543 489
+         L542 294
+         C542 263 564 241 593 241
+         C622 241 643 264 641 295
+         L630 496
+         L648 337
+         C652 309 674 291 702 295
+         C728 299 746 322 742 349
+         L722 518
+         L744 407
+         C750 380 774 364 800 370
+         C825 376 841 400 835 426
+         L796 618
+         C783 686 750 741 698 781
+         L681 814
+         Z"
+      fill="#FFF0D2"
+      stroke="#33261F"
+      stroke-width="18"
+      stroke-linejoin="round"
+      filter="url(#palmShadow)"/>
+
+    <g fill="none" stroke="#D49F6B" stroke-linecap="round" opacity="0.78">
+      <path d="M471 634C524 605 589 605 655 632" stroke-width="12"/>
+      <path d="M480 679C536 654 601 656 662 682" stroke-width="10"/>
+      <path d="M544 489L553 561" stroke-width="9"/>
+      <path d="M630 496L619 565" stroke-width="9"/>
+      <path d="M722 518L699 578" stroke-width="9"/>
+    </g>
+    </g>
+    </g>
+    </g>
+    </g>
+    </g>
+    </g>
+
+    <circle cx="512" cy="512" r="388" fill="url(#glass)"/>
+    <path d="M234 322C322 198 491 154 640 203" fill="none" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="24" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="512" cy="512" r="388" fill="none" stroke="#FFF2BD" stroke-opacity="0.58" stroke-width="6"/>
+</svg>

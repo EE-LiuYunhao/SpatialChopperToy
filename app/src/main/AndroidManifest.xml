@@ -10,13 +10,13 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_spatial_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.HandyCopterTheme"
+        android:theme="@style/Theme.SpatialChopperToy"
         tools:targetApi="31">
 
         <activity
             android:name=".platform.LaunchActivity"
             android:exported="true"
-            android:theme="@style/Theme.HandyCopterTheme">
+            android:theme="@style/Theme.SpatialChopperToy">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

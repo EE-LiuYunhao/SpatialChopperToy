@@ -3,8 +3,8 @@
   "kotlin_file_count": 2,
   "passed": true,
   "scan_inputs": [
-    "app/src/main/java/com/pico/spatial/handycopter/content/HomeStage.kt",
-    "app/src/main/java/com/pico/spatial/handycopter/content/PalmSpring.kt"
+    "app/src/main/java/com/pico/spatial/choppertoy/content/HomeStage.kt",
+    "app/src/main/java/com/pico/spatial/choppertoy/content/PalmSpring.kt"
   ],
   "schema_version": 3,
   "signals": {

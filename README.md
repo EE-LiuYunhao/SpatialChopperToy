@@ -1,95 +1,119 @@
-# HandyCopter
+# Spatial Chopper Toy
 
-HandyCopter is a PICO Spatial SDK Full Space application that lets the user position and fly a
-small helicopter with either realistic palm controls or a dual virtual-pad RC controller.
+Spatial Chopper Toy is a PICO Spatial SDK Full Space application for flying a small helicopter in
+the user's real environment with palm gestures. Pitch and roll act as cyclic control, palm height
+acts as collective, and palm heading acts as anti-torque/yaw input.
 
-## Interaction model
+## First-install tutorial
 
-At launch, a viewer-facing SpatialUI panel asks the user to choose one control mode:
+Android `SharedPreferences` records completion of a seven-lesson tutorial. A fresh installation
+requires the tracked right hand and teaches, in order:
 
-- **Realistic helicopter** uses one tracked palm as the cyclic, anti-torque, and collective input.
-- **RC drone** uses the vendored AnyController library to turn two circles drawn on a detected
-  plane into Mode-2-style virtual touchpads.
+1. pitch forward;
+2. pitch backward;
+3. roll left;
+4. roll right;
+5. raise the palm to climb;
+6. lower the palm to descend;
+7. turn the palm to yaw.
 
-The helicopter has exactly two runtime states:
+The tutorial panel is attached to the helicopter body at the same viewer-facing offset as the
+START/RESTART panel; there is no separate 3D hand guide. Each lesson recalibrates the current right
+palm pose as neutral and projects the production control mapping onto exactly one degree of freedom.
+The attitude indicator and helicopter use the same `3/40` cyclic mapping, yaw delta, collective
+gain, attitude controller, and lift solver as flight. The helicopter stays kinematic and
+gravity-free: tutorial velocity is projected onto only the lesson axis, slowed, and integrated for
+20 cm before snapping back to the lesson origin. Next remains disabled until the required
+directional gesture has been demonstrated. Forward/backward pitch and left/right roll gating follow
+the production motion signs, preventing a lesson label from accepting the opposite gesture.
 
-- `NOT_RUNNING`: the helicopter is kinematic, has no gravity or lift, ignores flight controls, and
-  can be dragged in three dimensions. Its attached SpatialUI panel exposes START only after the
-  selected controller is ready. After a crash the panel displays the recovery message and RESTART.
-- `RUNNING`: drag interaction and the launch panel are disabled. The flight solver combines local
-  rotor lift with gravity, and the selected controller drives local aircraft attitude and
-  collective. A crash freezes the helicopter at the impact site and returns it to `NOT_RUNNING`.
+## Interaction and flight model
+
+There is no launch-time control-mode choice and no virtual RC controller. Hand, HMD, and plane
+tracking start with the Stage.
+
+The helicopter has two runtime modes plus an end reason:
+
+- `NOT_RUNNING`: kinematic, gravity-free, draggable, and controlled by its attached START/RESTART
+  panel. START is enabled once a valid palm is tracked.
+- `RUNNING`: dynamic for collision response, while SDK gravity stays disabled because gravity is
+  included in the app's solver. Drag and the launch panel are disabled.
+- The previous flight end reason is `NONE`, `CRASHED`, or `LANDED`, allowing the recovery panel to
+  distinguish a safe landing from a crash.
 
 There is deliberately no Stop button, Exit button, stop transition, or alert dialog.
 
-## Spatial behavior
-
 - The helicopter initially appears approximately one meter in front of and 25 cm below the HMD.
-- The visual model and box collider share the same doubled scale.
-- Every tracked plane receives a collider. Any helicopter contact with one while `RUNNING` is a
-  crash, including a slow level contact, so both control modes always return to the draggable
-  `NOT_RUNNING` state with the RESTART panel.
-- The launch/recovery panel is a child of the helicopter and faces the viewer.
-- The mode/setup panel is placed in front of the HMD at launch. In RC mode it remains visible with
-  step-specific calibration guidance until both pads are ready.
-- Dragging uses a Spatial gesture targeted to the helicopter entity. The entity is interactable only in `NOT_RUNNING`.
-- Releasing or canceling a placement drag levels pitch and roll, then points the helicopter's tail toward the viewer from its new position.
-- Pressing START or RESTART captures the current filtered palm pitch, roll, and yaw as zero. The
-  attitude ball and heading panel then display movement relative to that pose, eliminating the
-  tracked hand's static roll bias. The helicopter preserves its current heading, levels pitch and
-  roll, and composes subsequent control deltas in aircraft-local space.
-- Filtered palm pitch and roll invert the hand-tracking sign to match the helicopter's visible
-  rotation and use `3/40` gain for both the attitude ball and helicopter cyclic control. Calibrated
-  yaw remains one-to-one.
-- The palm height at START or RESTART is the neutral collective point. At that height, a level helicopter receives `mass * gravity` rotor lift. Collective gain is `0.11` lift-multiplier units per meter, which is one twentieth of the previous `2.2` mapping.
-- RC setup first renders detected planes. The left index fingertip selects a plane, after which all
-  plane-discovery outlines are hidden. The user draws and lifts to size the left circle, touches its
-  forward direction, then draws and lifts to size the right circle.
-- RC input is neutral at each pad center. Left-pad Y maps linearly from zero to twice hover lift,
-  left-pad X commands a local yaw rate of up to 90 degrees per second, right-pad Y commands
-  longitudinal pitch, and right-pad X commands lateral bank in its visible travel direction. Pitch
-  and roll remain bounded to 30 degrees. Leaving a pad or losing tracking immediately neutralizes
-  that pad instead of holding stale commands.
-- Pitch and roll are composed together to rotate one unit body-up vector. Collective scales that
-  vector, then gravity is added in local coordinates. The solver converts the resulting 3D net
-  force directly to terminal velocity using linear-plus-quadratic air resistance and rotates that
-  velocity into Stage space using only the current heading. At neutral collective with level pitch
-  and roll, lift exactly cancels gravity and velocity is zero; tilting naturally trades vertical
-  lift for horizontal motion.
+- The launch/recovery panel is attached to the helicopter and faces the viewer.
+- Drag release or cancellation levels pitch and roll and points the tail toward the viewer.
+- START/RESTART captures filtered palm pitch, roll, yaw, and height as the session zero. Pitch and
+  roll invert the tracking sign and use `3/40` gain; yaw is one-to-one. Attitude deltas are composed
+  in aircraft-local space after the preserved level heading.
+- Palm height uses a collective gain of `0.11` lift-multiplier units per meter. At the captured
+  height, level lift equals `mass * gravity`.
+- Pitch and roll rotate one body-up lift vector. The solver adds gravity, solves each force component
+  for terminal velocity with linear-plus-quadratic drag, and rotates velocity into Stage space by
+  heading. Tilting therefore trades vertical lift for horizontal motion.
 
-## Spatial audio
+## Collision, landing, and audio
 
-- Two `ObjectAudioComponent` child entities are parented to the helicopter, so their HRTF position and inverse-square distance attenuation follow the aircraft automatically.
-- The looping rotor sound starts only on `NOT_RUNNING -> RUNNING` and stops immediately when flight ends.
-- A one-shot crash sound plays only on a crash-caused `RUNNING -> NOT_RUNNING` transition. Repeated collision updates in `NOT_RUNNING` cannot retrigger it.
-- Both clips are preloaded from uncompressed APK assets and their player controllers/resources are released with the Stage lifecycle.
+Every tracked plane has a detailed collider. Landing classification uses the tracked plane anchor's
+scene-space surface center and normal instead of inferring a helicopter-box face from collision
+contact coordinates. A contact during `RUNNING` is a safe landing only when:
 
-## Build and device validation
+- the collided plane is approximately horizontal, with its support normal aligned to Stage up by at
+  least `0.82`;
+- the tracked surface center is below the helicopter center in Stage space;
+- the support normal aligns with helicopter local up by at least `cos⁻¹(0.70)`;
+- plane-normal relative speed is at most `0.70 m/s`;
+- plane-tangential drift is at most `0.75 m/s`; and
+- total relative speed is at most `0.95 m/s`.
+
+Splitting normal and tangential speed avoids rejecting a gentle descent merely because it also has
+modest horizontal drift. Each collision logs horizontal alignment, below-body separation,
+helicopter-up alignment, contact count, surface geometry, and all three measured speeds for device
+diagnosis. All other tracked-plane contacts remain crashes. Either outcome freezes the helicopter
+at the contact site, stops the looping rotor, restores drag, and shows RESTART. A safe landing does
+not play the crash sound and displays exactly:
+
+> Congratulations! You have landed the helicopter successfully.
+
+Two `ObjectAudioComponent` children follow the helicopter. The rotor loop starts only on entry to
+`RUNNING`; the crash one-shot plays only for a crash-caused exit. Audio controllers and resources
+are released with the Stage lifecycle.
+
+## Layered launcher icon
+
+The PICO launcher icon keeps the platform's two-layer spatial presentation. The opaque base layer
+uses the attitude indicator's blue-sky/brown-ground palette and a foreshortened horizontal palm;
+the transparent foreground layer places a cartoon toy helicopter above the palm so it appears to
+be supported by the hand. Editable 1024×1024 SVG sources are in `design/icons/`.
+
+The packaged layer order remains foreground `icon_3d_layer_1` followed by background
+`icon_3d_layer_0`. Matching grayscale distance fields drive the system highlight and edge effects,
+and `ic_spatial_launcher.png` is the flattened compatibility icon.
+
+## Build and validation
 
 ```bash
-# Format Kotlin, Java, Gradle Kotlin, Markdown, XML, and YAML sources.
 ./gradlew spotlessApply
-
-# Verify formatting and run strict Kotlin static analysis.
-./gradlew spotlessCheck detekt
-
-# Run the complete local verification gate.
-GRADLE_USER_HOME=/data00/home/yunhao.liu/.gradle ./gradlew spotlessCheck detekt testDebugUnitTest assembleDebug lintDebug
+GRADLE_USER_HOME=/data00/home/yunhao.liu/.gradle \
+  ./gradlew spotlessCheck detekt testDebugUnitTest assembleDebug lintDebug
 
 adb -s <device> install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s <device> shell am start -W -n com.pico.spatial.handycopter/.platform.LaunchActivity
+adb -s <device> shell am start -W \
+  -n com.pico.spatial.choppertoy/.platform.LaunchActivity
 ```
 
-Spotless and Detekt mirror the SpatialAI repository configuration. Detekt uses
-`config/detekt/detekt.yml`, fails on any finding, and analyzes both the app and reusable
-`:anycontroller` module main/unit-test Kotlin sources without a baseline.
+Spotless and Detekt mirror the SpatialAI repository configuration. Detekt has no baseline and fails
+on any finding. The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
-The debug build was installed and launched on PICO device `PB311XKGL4160042B`. Device logs confirmed Full Space creation, both attachment panels, hand/HMD/plane tracking, successful `helicopter.glb` loading, and preparation of both spatial-audio resources. A headset START/crash cycle then showed the 48 kHz rotor source start as spatialized audio, stop at the crash transition, and the 44.1 kHz crash source start and complete once. The Android crash buffer remained empty. ADB screenshots are black for this Spatial compositor path, so perceived sound direction and attenuation still require listening validation in the headset.
+The 2026-10-05 gate passed the SpatialUI verifier (0 errors, 0 warnings), Spotless, Detekt, 43 unit
+tests, APK assembly, and Android Lint. PICO CLI 0.5.0 then cleanly reinstalled and launched the APK
+on `PB311XKGL4160042B`; the process stayed live, the helicopter and both spatial-audio resources
+loaded, the crash buffer remained empty, and a bounded 10-second watcher observed no crash. A
+physical safe-landing attempt still requires a worn-headset interaction pass; each collision now
+logs the horizontal-surface, below-body, alignment, and speed evidence needed for that pass.
 
-The reusable controller source is vendored under `anycontroller/` from internal upstream commit
-`591666d`; provenance and local changes are recorded in `anycontroller/UPSTREAM.md`. The upstream
-demo application is not included.
-
-The packaged helicopter asset is `app/src/main/assets/helicopter.glb`; its attribution is recorded
-in `helicopter.LICENSE.txt`. Audio attribution and source URLs are recorded in
-`audio.LICENSE.md`.
+The packaged helicopter asset is `app/src/main/assets/helicopter.glb`; its attribution is in
+`helicopter.LICENSE.txt`. Audio attribution and source URLs are in `audio.LICENSE.md`.

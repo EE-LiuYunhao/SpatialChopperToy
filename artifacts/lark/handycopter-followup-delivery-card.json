@@ -1,0 +1,194 @@
+{
+  "schema": "2.0",
+  "config": {
+    "update_multi": true,
+    "width_mode": "default",
+    "summary": {
+      "content": "HandyCopter 着陆与教程方向修复已交付"
+    },
+    "style": {
+      "text_size": {
+        "focus": {
+          "default": "heading-3",
+          "pc": "heading-3",
+          "mobile": "heading-4"
+        },
+        "caption": {
+          "default": "notation",
+          "pc": "notation",
+          "mobile": "notation"
+        }
+      },
+      "color": {
+        "success": {
+          "light_mode": "rgba(22,138,69,1)",
+          "dark_mode": "rgba(80,190,120,1)"
+        },
+        "muted": {
+          "light_mode": "rgba(100,106,115,1)",
+          "dark_mode": "rgba(150,155,163,1)"
+        }
+      }
+    }
+  },
+  "header": {
+    "title": {
+      "tag": "plain_text",
+      "content": "HandyCopter 修复已交付"
+    },
+    "subtitle": {
+      "tag": "plain_text",
+      "content": "2026-10-05 · PICO 真机 PB311XKGL4160042B"
+    },
+    "template": "green",
+    "icon": {
+      "tag": "standard_icon",
+      "token": "todo_colorful"
+    },
+    "text_tag_list": [
+      {
+        "tag": "text_tag",
+        "text": {
+          "tag": "plain_text",
+          "content": "已构建并安装"
+        },
+        "color": "green"
+      }
+    ]
+  },
+  "body": {
+    "direction": "vertical",
+    "padding": "12px 12px 20px 12px",
+    "vertical_spacing": "12px",
+    "elements": [
+      {
+        "tag": "column_set",
+        "element_id": "result",
+        "flex_mode": "none",
+        "columns": [
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "green-50",
+            "padding": "12px",
+            "vertical_spacing": "4px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "<font color='success'>**核心结果：安全降落已改用真实平面几何，教程前/后手势语义已校正。**</font>",
+                "text_size": "focus"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='muted'>底面接触带逻辑已彻底移除；新 APK 已覆盖安装并保持稳定运行。</font>",
+                "text_size": "caption"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "column_set",
+        "element_id": "metrics",
+        "flex_mode": "none",
+        "horizontal_spacing": "8px",
+        "columns": [
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "green-50",
+            "padding": "8px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "**43 项**",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='muted'>单元测试通过</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          },
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "green-50",
+            "padding": "8px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "**0 / 0**",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='muted'>SpatialUI 错误/警告</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          },
+          {
+            "tag": "column",
+            "width": "weighted",
+            "weight": 1,
+            "background_style": "green-50",
+            "padding": "8px",
+            "vertical_spacing": "2px",
+            "elements": [
+              {
+                "tag": "markdown",
+                "content": "**10 秒**",
+                "text_align": "center"
+              },
+              {
+                "tag": "markdown",
+                "content": "<font color='muted'>真机无崩溃监测</font>",
+                "text_align": "center",
+                "text_size": "caption"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "collapsible_panel",
+        "element_id": "details",
+        "expanded": false,
+        "background_color": "grey-50",
+        "border": {
+          "color": "green-100",
+          "corner_radius": "8px"
+        },
+        "padding": "8px",
+        "vertical_spacing": "8px",
+        "header": {
+          "title": {
+            "tag": "plain_text",
+            "content": "查看实现与验证明细"
+          },
+          "width": "fill"
+        },
+        "elements": [
+          {
+            "tag": "markdown",
+            "content": "**安全降落**\n- 碰撞平面支持法线与 Stage up 对齐 ≥ 0.82\n- 平面中心位于机身中心下方\n- 支持法线与直升机 local up 对齐 ≥ 0.70\n- 法向速度 ≤ 0.70、切向速度 ≤ 0.75、总速度 ≤ 0.95 m/s\n- 日志输出 horizontal / below / alignedSupport / 三段速度\n\n**新手引导**\n- Step 1 现在只接受向前飞行对应的生产 pitch 符号\n- Step 2 只接受向后飞行对应的生产 pitch 符号\n- 新增回归测试，把教程姿态送入真实 `solveHelicopterMotion` 验证纵向速度方向\n\n**质量门**\n- Spotless、Detekt、43 项单测、assembleDebug、lintDebug 全部通过\n- 真机进程存活、模型与两路空间音频加载成功、crash buffer 为空"
+          }
+        ]
+      },
+      {
+        "tag": "markdown",
+        "element_id": "boundary",
+        "content": "**仍需人工闭环**\n空间手势无法由 CLI 可靠自动化；请佩戴头显完成一次真实安全降落。新日志会明确显示每个条件是否满足。\n\n<font color='muted'>APK SHA-256：5128a41be102… · 完整实现与交付文档已同步更新</font>"
+      }
+    ]
+  }
+}
