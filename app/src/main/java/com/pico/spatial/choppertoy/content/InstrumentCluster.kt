@@ -18,14 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pico.spatial.choppertoy.R
 import com.pico.spatial.ui.design.Button
 import com.pico.spatial.ui.design.ButtonDefaults
 import com.pico.spatial.ui.design.Text
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -56,11 +57,11 @@ internal fun HelicopterLaunchPanel(
             text =
                 when {
                     endReason == FlightEndReason.LANDED ->
-                        "Congratulations! You have landed the helicopter successfully."
+                        stringResource(R.string.flight_landed_message)
                     endReason == FlightEndReason.CRASHED ->
-                        "Oops, crashed. Drag the helicopter to its next start position"
-                    !controlReady -> "Show a palm to enable START"
-                    else -> "Drag the helicopter to its start position"
+                        stringResource(R.string.flight_crashed_message)
+                    !controlReady -> stringResource(R.string.show_palm_to_enable_start)
+                    else -> stringResource(R.string.drag_helicopter_to_start_position)
                 },
             color = InstrumentWhite,
             fontSize = 12.sp,
@@ -80,7 +81,14 @@ internal fun HelicopterLaunchPanel(
         ) {
             // design-style: inherited-content-color Button
             Text(
-                text = if (endReason == FlightEndReason.NONE) "START" else "RESTART",
+                text =
+                    stringResource(
+                        if (endReason == FlightEndReason.NONE) {
+                            R.string.start_action
+                        } else {
+                            R.string.restart_action
+                        }
+                    ),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
             )
@@ -98,14 +106,15 @@ internal fun FlightTutorialPanel(state: FlightTutorialUiState, onNext: () -> Uni
         verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically),
     ) {
         Text(
-            text = "FLIGHT LESSON ${state.stepNumber} / ${state.stepCount}",
+            text =
+                stringResource(R.string.flight_lesson_progress, state.stepNumber, state.stepCount),
             color = InstrumentWhite,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
         Text(
-            text = tutorialLessonTitle(state.step),
+            text = stringResource(tutorialLessonTitleResource(state.step)),
             color = InstrumentYellow,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
@@ -114,9 +123,11 @@ internal fun FlightTutorialPanel(state: FlightTutorialUiState, onNext: () -> Uni
         Text(
             text =
                 when {
-                    state.waitingForRightHand -> "Show your right palm to begin this lesson."
-                    state.preparingHelicopter -> "Preparing the helicopter…"
-                    else -> tutorialLessonInstruction(state.step)
+                    state.waitingForRightHand ->
+                        stringResource(R.string.tutorial_waiting_for_right_palm)
+                    state.preparingHelicopter ->
+                        stringResource(R.string.tutorial_preparing_helicopter)
+                    else -> stringResource(tutorialLessonInstructionResource(state.step))
                 },
             color = InstrumentWhite,
             fontSize = 13.sp,
@@ -133,41 +144,43 @@ internal fun FlightTutorialPanel(state: FlightTutorialUiState, onNext: () -> Uni
                 ),
         ) {
             // design-style: inherited-content-color Button
-            Text("Next", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.next_action), fontWeight = FontWeight.Bold)
         }
     }
 }
 
-private fun tutorialLessonTitle(step: FlightTutorialStep): String =
+private fun tutorialLessonTitleResource(step: FlightTutorialStep): Int =
     when (step) {
-        FlightTutorialStep.PITCH_FORWARD -> "Pitch forward"
-        FlightTutorialStep.PITCH_BACKWARD -> "Pitch backward"
-        FlightTutorialStep.ROLL_LEFT -> "Roll left"
-        FlightTutorialStep.ROLL_RIGHT -> "Roll right"
-        FlightTutorialStep.ASCEND -> "Raise your palm"
-        FlightTutorialStep.DESCEND -> "Lower your palm"
-        FlightTutorialStep.YAW -> "Turn your palm"
+        FlightTutorialStep.PITCH_FORWARD -> R.string.tutorial_pitch_forward_title
+        FlightTutorialStep.PITCH_BACKWARD -> R.string.tutorial_pitch_backward_title
+        FlightTutorialStep.ROLL_LEFT -> R.string.tutorial_roll_left_title
+        FlightTutorialStep.ROLL_RIGHT -> R.string.tutorial_roll_right_title
+        FlightTutorialStep.ASCEND -> R.string.tutorial_ascend_title
+        FlightTutorialStep.DESCEND -> R.string.tutorial_descend_title
+        FlightTutorialStep.YAW -> R.string.tutorial_yaw_title
     }
 
-private fun tutorialLessonInstruction(step: FlightTutorialStep): String =
+private fun tutorialLessonInstructionResource(step: FlightTutorialStep): Int =
     when (step) {
-        FlightTutorialStep.PITCH_FORWARD ->
-            "Press the nose down. Lift tilts forward, so the helicopter flies forward but may lose altitude."
-        FlightTutorialStep.PITCH_BACKWARD ->
-            "Raise the nose. Lift tilts backward and the helicopter flies backward."
-        FlightTutorialStep.ROLL_LEFT ->
-            "Roll your right palm left to bank and move the helicopter left."
-        FlightTutorialStep.ROLL_RIGHT ->
-            "Roll your right palm right to bank and move the helicopter right."
-        FlightTutorialStep.ASCEND -> "Raise your right palm to increase collective lift and climb."
-        FlightTutorialStep.DESCEND -> "Lower your right palm to reduce collective lift and descend."
-        FlightTutorialStep.YAW ->
-            "Turn your right palm to rotate the helicopter around its vertical axis."
+        FlightTutorialStep.PITCH_FORWARD -> R.string.tutorial_pitch_forward_instruction
+        FlightTutorialStep.PITCH_BACKWARD -> R.string.tutorial_pitch_backward_instruction
+        FlightTutorialStep.ROLL_LEFT -> R.string.tutorial_roll_left_instruction
+        FlightTutorialStep.ROLL_RIGHT -> R.string.tutorial_roll_right_instruction
+        FlightTutorialStep.ASCEND -> R.string.tutorial_ascend_instruction
+        FlightTutorialStep.DESCEND -> R.string.tutorial_descend_instruction
+        FlightTutorialStep.YAW -> R.string.tutorial_yaw_instruction
     }
 
 /** Renders the absolute stage-space heading indicator beside the attitude ball. */
 @Composable
 internal fun HeadingPanel(headingDegrees: Float) {
+    val cardinalLabels =
+        listOf(
+            0 to stringResource(R.string.cardinal_north),
+            90 to stringResource(R.string.cardinal_east),
+            180 to stringResource(R.string.cardinal_south),
+            270 to stringResource(R.string.cardinal_west),
+        )
     Column(
         modifier =
             Modifier.fillMaxSize().background(PanelScrim, RoundedCornerShape(16.dp)).padding(6.dp),
@@ -175,7 +188,7 @@ internal fun HeadingPanel(headingDegrees: Float) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "HEADING",
+            text = stringResource(R.string.heading_label),
             color = InstrumentWhite,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
@@ -201,7 +214,6 @@ internal fun HeadingPanel(headingDegrees: Float) {
                     )
                 }
 
-                val labels = mapOf(0 to "N", 90 to "E", 180 to "S", 270 to "W")
                 drawContext.canvas.nativeCanvas.apply {
                     val paint =
                         android.graphics.Paint().apply {
@@ -211,7 +223,7 @@ internal fun HeadingPanel(headingDegrees: Float) {
                             isAntiAlias = true
                             typeface = android.graphics.Typeface.DEFAULT_BOLD
                         }
-                    labels.forEach { (bearing, label) ->
+                    cardinalLabels.forEach { (bearing, label) ->
                         val radians = (bearing - headingDegrees) * PI.toFloat() / 180f
                         drawText(
                             label,
@@ -232,7 +244,7 @@ internal fun HeadingPanel(headingDegrees: Float) {
                 drawPath(pointer, InstrumentYellow)
             }
             Text(
-                text = String.format(Locale.US, "%05.1f°", headingDegrees),
+                text = stringResource(R.string.heading_value_degrees, headingDegrees),
                 color = InstrumentWhite,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,

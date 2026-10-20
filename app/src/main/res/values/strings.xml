@@ -1,4 +1,33 @@
 <resources>
     <string name="app_name">Spatial Chopper Toy</string>
-    <string name="hello">Hello, Spatial SDK！</string>
+    <string name="flight_landed_message">Congratulations! You have landed the helicopter successfully.</string>
+    <string name="flight_crashed_message">Oops, crashed. Drag the helicopter to its next start position.</string>
+    <string name="show_palm_to_enable_start">Show a palm to enable START</string>
+    <string name="drag_helicopter_to_start_position">Drag the helicopter to its start position</string>
+    <string name="start_action">START</string>
+    <string name="restart_action">RESTART</string>
+    <string name="flight_lesson_progress">FLIGHT LESSON %1$d / %2$d</string>
+    <string name="tutorial_waiting_for_right_palm">Show your right palm to begin this lesson.</string>
+    <string name="tutorial_preparing_helicopter">Preparing the helicopter…</string>
+    <string name="next_action">Next</string>
+    <string name="tutorial_pitch_forward_title">Pitch forward</string>
+    <string name="tutorial_pitch_backward_title">Pitch backward</string>
+    <string name="tutorial_roll_left_title">Roll left</string>
+    <string name="tutorial_roll_right_title">Roll right</string>
+    <string name="tutorial_ascend_title">Raise your palm</string>
+    <string name="tutorial_descend_title">Lower your palm</string>
+    <string name="tutorial_yaw_title">Turn your palm</string>
+    <string name="tutorial_pitch_forward_instruction">Press the nose down. Lift tilts forward, so the helicopter flies forward but may lose altitude.</string>
+    <string name="tutorial_pitch_backward_instruction">Raise the nose. Lift tilts backward and the helicopter flies backward.</string>
+    <string name="tutorial_roll_left_instruction">Roll your right palm left to bank and move the helicopter left.</string>
+    <string name="tutorial_roll_right_instruction">Roll your right palm right to bank and move the helicopter right.</string>
+    <string name="tutorial_ascend_instruction">Raise your right palm to increase collective lift and climb.</string>
+    <string name="tutorial_descend_instruction">Lower your right palm to reduce collective lift and descend.</string>
+    <string name="tutorial_yaw_instruction">Turn your right palm to rotate the helicopter around its vertical axis.</string>
+    <string name="heading_label">HEADING</string>
+    <string name="cardinal_north">N</string>
+    <string name="cardinal_east">E</string>
+    <string name="cardinal_south">S</string>
+    <string name="cardinal_west">W</string>
+    <string name="heading_value_degrees">%1$05.1f°</string>
 </resources>

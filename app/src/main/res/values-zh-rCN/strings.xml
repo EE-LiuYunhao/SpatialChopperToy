@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">空间直升机玩具</string>
+    <string name="flight_landed_message">恭喜！你已成功降落直升机。</string>
+    <string name="flight_crashed_message">糟糕，坠毁了。请将直升机拖动到下一个起飞位置。</string>
+    <string name="show_palm_to_enable_start">张开手掌以开始</string>
+    <string name="drag_helicopter_to_start_position">将直升机拖动到起飞位置</string>
+    <string name="start_action">开始</string>
+    <string name="restart_action">重新开始</string>
+    <string name="flight_lesson_progress">飞行课程 %1$d / %2$d</string>
+    <string name="tutorial_waiting_for_right_palm">张开右手掌以开始本课程</string>
+    <string name="tutorial_preparing_helicopter">正在准备直升机…</string>
+    <string name="next_action">下一步</string>
+    <string name="tutorial_pitch_forward_title">向前俯仰</string>
+    <string name="tutorial_pitch_backward_title">向后俯仰</string>
+    <string name="tutorial_roll_left_title">向左横滚</string>
+    <string name="tutorial_roll_right_title">向右横滚</string>
+    <string name="tutorial_ascend_title">抬高手掌</string>
+    <string name="tutorial_descend_title">降低手掌</string>
+    <string name="tutorial_yaw_title">转动手掌</string>
+    <string name="tutorial_pitch_forward_instruction">向下压低机头。升力会向前倾斜，因此直升机会向前飞行，但可能会损失高度</string>
+    <string name="tutorial_pitch_backward_instruction">抬高机头。升力向后倾斜，直升机将向后飞行</string>
+    <string name="tutorial_roll_left_instruction">将右手掌向左横滚，使直升机向左倾斜并移动</string>
+    <string name="tutorial_roll_right_instruction">将右手掌向右横滚，使直升机向右倾斜并移动</string>
+    <string name="tutorial_ascend_instruction">抬高右手掌以增加升力并爬升</string>
+    <string name="tutorial_descend_instruction">降低右手掌以减小升力并下降。</string>
+    <string name="tutorial_yaw_instruction">转动右手掌，使直升机转向</string>
+    <string name="heading_label">航向</string>
+    <string name="cardinal_north">N</string>
+    <string name="cardinal_east">E</string>
+    <string name="cardinal_south">S</string>
+    <string name="cardinal_west">W</string>
+    <string name="heading_value_degrees">%1$05.1f°</string>
+</resources>

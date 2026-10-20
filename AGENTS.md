@@ -8,6 +8,10 @@ Also read `./PICO-SPATIAL-AGENTIC-TOOLS.AGENTS.md` for PICO Spatial plugin guida
 
 - The project and launcher label are `Spatial Chopper Toy`; the Android application ID and Kotlin
   namespace are `com.pico.spatial.choppertoy`.
+- All launcher and in-app UI copy, including tutorial, launch/recovery, heading, and compass text,
+  is declared in `app/src/main/res/values/strings.xml` and resolved from resources in Compose.
+  The reviewed Simplified Chinese translations live in
+  `app/src/main/res/values-zh-rCN/strings.xml`; keep runtime logs and entity names in code.
 - The application is a Full Space `DefaultStage` PICO Spatial SDK app.
 - `HomeStage.kt` owns the always-on tracking lifecycle, first-install tutorial coordination, palm
   instrument cluster, and Spatial drag gesture.
@@ -61,3 +65,7 @@ Also read `./PICO-SPATIAL-AGENTIC-TOOLS.AGENTS.md` for PICO Spatial plugin guida
   and a bounded 10-second crash watcher found no crash. Host gates passed the SpatialUI verifier,
   Spotless, Detekt, 43 unit tests, APK assembly, and Android Lint. Physical landing classification
   still needs a worn-headset interaction pass; use the logged horizontal/below/aligned/speed fields.
+- The 2026-10-20 localization gate passed the SpatialUI verifier with zero findings, Spotless,
+  Detekt, all 43 unit tests, APK assembly, and Android Lint. Runtime installation was not repeated:
+  the mandatory `pico-cli doctor --platform spatial` preflight reported blocking `PICO_HOME` and
+  Android SDK configuration findings and PICO development knowledge 6.0 against the SDK 6.1 line.

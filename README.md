@@ -27,6 +27,16 @@ gravity-free: tutorial velocity is projected onto only the lesson axis, slowed, 
 directional gesture has been demonstrated. Forward/backward pitch and left/right roll gating follow
 the production motion signs, preventing a lesson label from accepting the opposite gesture.
 
+## Localization
+
+All launcher and in-app UI copy is defined in `app/src/main/res/values/strings.xml`; Compose UI
+resolves it with `stringResource`, including formatted lesson progress, heading values, and compass
+cardinal marks. Locale-specific translations belong in Android resource-qualified directories such
+as `app/src/main/res/values-zh-rCN/`. The Simplified Chinese resources were reviewed through the
+two-row Lark translation sheet and applied without changing the English source row. Runtime logs,
+entity names, and diagnostic messages remain code constants because they are developer-facing
+rather than UI copy.
+
 ## Interaction and flight model
 
 There is no launch-time control-mode choice and no virtual RC controller. Hand, HMD, and plane
